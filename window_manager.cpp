@@ -8,6 +8,9 @@ extern "C" {
 #include <cstring>
 #include <algorithm>
 
+bool WindowManager::b_wm_detected;
+std::mutex WindowManager::mutex_wm_detected;
+
 std::unique_ptr<WindowManager> WindowManager::Create(const std::string& display_str)
 {
     Display* display = XOpenDisplay(display_str.empty() ? nullptr : display_str.c_str());
@@ -36,7 +39,7 @@ WindowManager::~WindowManager()
 
 void WindowManager::Run()
 {
-    std::lock_guard<std::mutex> lock(mutex_vm_detexted);
+    std::lock_guard<std::mutex> lock(mutex_wm_detected);
 
     b_wm_detected = false;
     XSetErrorHandler(&WindowManager::OnWMDetected);

@@ -53,8 +53,8 @@ private:
     static int OnWMDetected(Display* display, XErrorEvent* e);
     static bool b_wm_detected;
 
-    /**Mutex for protecting b_vm_detected*/
-    static std::mutex mutex_vm_detexted;
+    /**Mutex for protecting b_wm_detected*/
+    static std::mutex mutex_wm_detected;
 
     /**Cursor position at the start of a window move/resize*/
     Position<int> drag_start_position;

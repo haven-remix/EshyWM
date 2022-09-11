@@ -71,7 +71,7 @@ void WindowManager::Run()
     XFree(top_level_windows);
 
     //Ungrab X server
-    XUngrabServer(display;)
+    XUngrabServer(display);
 
     //Main event loop
     for (;;)
@@ -139,7 +139,19 @@ int WindowManager::OnWMDetected(Display* display, XErrorEvent* event)
 
 int WindowManager::OnXError(Display* display, XErrorEvent* event)
 {
+    const int MAX_ERROR_TEXT_LEGTH = 1024;
+    char error_text[MAX_ERROR_TEXT_LEGTH];
 
+    XGetErrorText(display, event->error_code, error_text, sizeof(error_text));
+
+    LOG(ERROR) << "Received X error:\n"
+               << "    Request: " << int(event->request_code)
+               << " - " << XRequestCodeToString(event->request_code) << "\n"
+               << "    Error code: " << int(event->error_code)
+               << " - " << error_text << "\n"
+               << "    Resource ID: " << event->resourceid;
+
+    return 0;
 }
 
 void WindowManager::OnCreateNotify(const XCreateWindowEvent& event)
@@ -201,7 +213,7 @@ void WindowManager::OnConfigureRequest(const XConfigureRequestEvent& event)
     {
         const Window frame = clients[event.window];
         XConfigureWindow(display, frame, event.value_mask, &changes);
-        LOG(INFO) < "Resize [" << frame << "] to " << Size<int>(event.width, event.height);
+        LOG(INFO) << "Resize [" << frame << "] to " << Size<int>(event.width, event.height);
     }
 
     //Grant request
@@ -231,7 +243,7 @@ void WindowManager::Frame(Window window, bool b_was_created_before_window_manage
     //If window was created before window manager started, we should frame it only if it is visible and does not set override_redirect
     if(b_was_created_before_window_manager)
     {
-        if(x_window_attributes.override_redirect || x_window_attrs.map_state != IsViewable)
+        if(x_window_attributes.override_redirect || x_window_attributes.map_state != IsViewable)
         {
             return;
         }
@@ -242,7 +254,7 @@ void WindowManager::Frame(Window window, bool b_was_created_before_window_manage
 
     //Select events on frame
     XSelectInput(display, frame, SubstructureRedirectMask | SubstructureNotifyMask);
-    
+
     //Add client to save set, so that it will be restored and kept alive if we crash
     XAddToSaveSet(display, window);
 
@@ -261,11 +273,11 @@ void WindowManager::Frame(Window window, bool b_was_created_before_window_manage
     //Right windows with alt + right button
     XGrabButton(display, Button3, Mod1Mask, window, false, ButtonPressMask | ButtonReleaseMask | ButtonMotionMask, GrabModeAsync, GrabModeAsync, None, None);
     //Kill windows with alt + f4 button
-    XGrabButton(display, XKeysymToKeycode(display, XK_F4), Mod1Mask, window, false, GrabModeAsync, GrabModeAsync);
+    XGrabKey(display, XKeysymToKeycode(display, XK_F4), Mod1Mask, window, false, GrabModeAsync, GrabModeAsync);
     //Switch windows with alt + tab button
-    XGrabButton(display, XKeysymToKeycode(display, XK_Tab), Mod1Mask, window, false, GrabModeAsync, GrabModeAsync);
+    XGrabKey(display, XKeysymToKeycode(display, XK_Tab), Mod1Mask, window, false, GrabModeAsync, GrabModeAsync);
 
-    LOG(INFO) << "Framed window " << w << " [" << frame << "]";
+    LOG(INFO) << "Framed window " << window << " [" << frame << "]";
 }
 
 void WindowManager::Unframe(Window window)

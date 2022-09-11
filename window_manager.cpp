@@ -226,7 +226,7 @@ void WindowManager::Frame(Window window, bool b_was_created_before_window_manage
 
     //Retrieve attributes of window to frame
     XWindowAttributes x_window_attributes;
-    CHECK(XGetWindowAttributes(display, window, &w_window_attributes));
+    CHECK(XGetWindowAttributes(display, window, &x_window_attributes));
 
     //If window was created before window manager started, we should frame it only if it is visible and does not set override_redirect
     if(b_was_created_before_window_manager)
@@ -238,8 +238,11 @@ void WindowManager::Frame(Window window, bool b_was_created_before_window_manage
     }
 
     //Create frame
-    const Window frame = XCreateSimpleWindow(display, frame, SubstructureRedirectMask | SubstructureNotifyMask);
+    const Window frame = XCreateSimpleWindow(display, root, x_window_attributes.x, x_window_attributes.y, x_window_attributes.width, x_window_attributes.height, BORDER_WIDTH, BORDER_COLOR, BG_COLOR);
 
+    //Select events on frame
+    XSelectInput(display, frame, SubstructureRedirectMask | SubstructureNotifyMask);
+    
     //Add client to save set, so that it will be restored and kept alive if we crash
     XAddToSaveSet(display, window);
 
@@ -270,7 +273,7 @@ void WindowManager::Unframe(Window window)
     CHECK(clients.count(window));
 
     //Reverse what we did in frame
-    const Window frame = clients[w];
+    const Window frame = clients[window];
     //Unmap frame
     XUnmapWindow(display, frame);
     //Reparent client window back to root window. Last params are the offset of the client window within root

@@ -278,7 +278,7 @@ void WindowManager::Unframe(Window window)
     //Remove client window from save set, as it is now unrelated to us.
     XRemoveFromSaveSet(display, window);
     //Destroy frame
-    XDestroyFrame(display, frame);
+    XDestroyWindow(display, frame);
     //Drop referrence to frame handle
     clients.erase(window);
 
@@ -319,17 +319,17 @@ void WindowManager::OnMotionNotify(const XMotionEvent& event)
 {
     CHECK(clients.count(event.window));
     const Window frame = clients[event.window];
-    const Position<int> drag_pos(event.x_root, e.y_root);
-    const Vector2D<int> delta = drag_pos - drag_start_pos;
+    const Position<int> drag_position(event.x_root, event.y_root);
+    const Vector2D<int> delta = drag_position - drag_start_position;
 
     if(event.state & Button1Mask)
     {
-        const Position<int> dest_frame_pos = drag_start_frame_pos + delta;
-        XMoveWindow(display, frame, dest_frame_pos.x, dest_frame_pos.y);
+        const Position<int> dest_frame_position = drag_start_frame_position + delta;
+        XMoveWindow(display, frame, dest_frame_position.x, dest_frame_position.y);
     }
     else if(event.state & Button3Mask)
     {
-        const Vector2D<int> size_delta(max(delta.x, -drag_start_frame_size.width), max(delta.y, -drag_start_frame_size.height));
+        const Vector2D<int> size_delta(std::max(delta.x, -drag_start_frame_size.width), std::max(delta.y, -drag_start_frame_size.height));
         const Size<int> dest_frame_size = drag_start_frame_size + size_delta;
 
         //Resize frame
@@ -354,7 +354,7 @@ void WindowManager::OnKeyPress(const XKeyEvent& event)
             //Construct message
             XEvent message;
             memset(&message, 0, sizeof(message));
-            message.xclient.type = ClientManager;
+            message.xclient.type = ClientMessage;
             message.xclient.message_type = WM_PROTOCOLS;
             message.xclient.window = event.window;
             message.xclient.format = 32;

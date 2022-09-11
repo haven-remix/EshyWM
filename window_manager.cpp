@@ -279,6 +279,8 @@ void WindowManager::Frame(Window window, bool b_was_created_before_window_manage
     XGrabKey(display, XKeysymToKeycode(display, XK_F4), Mod1Mask, window, false, GrabModeAsync, GrabModeAsync);
     //Switch windows with alt + tab
     XGrabKey(display, XKeysymToKeycode(display, XK_Tab), Mod1Mask, window, false, GrabModeAsync, GrabModeAsync);
+    //Switch windows with alt + enter
+    XGrabKey(display, XKeysymToKeycode(display, XK_KP_Enter), Mod1Mask, window, false, GrabModeAsync, GrabModeAsync);
 
     LOG(INFO) << "Framed window " << window << " [" << frame << "]";
 }
@@ -400,8 +402,10 @@ void WindowManager::OnKeyPress(const XKeyEvent& event)
         //Raise and set focus
         XRaiseWindow(display, i->second);
         XSetInputFocus(display, i->first, RevertToPointerRoot, CurrentTime);
-
-        LOG(INFO) << "Testing log " << event.window;
+    }
+    else if ((event.state & Mod1Mask) & (event.keycode == XKeysymToKeycode(display, XK_KP_Enter)))
+    {
+        system("kitty");
     }
 }
 

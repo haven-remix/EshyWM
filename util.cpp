@@ -1,12 +1,12 @@
-#include "util.hpp"
+#include "util.h"
 #include <algorithm>
 #include <sstream>
 #include <vector>
 
-using ::std::string;
-using ::std::vector;
-using ::std::pair;
-using ::std::ostringstream;
+using std::string;
+using std::vector;
+using std::pair;
+using std::ostringstream;
 
 string ToString(const XEvent& e) {
   static const char* const X_EVENT_TYPE_NAMES[] = {

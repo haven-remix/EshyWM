@@ -329,18 +329,18 @@ void WindowManager::OnMotionNotify(const XMotionEvent& event)
     }
     else if(event.state & Button3Mask)
     {
-        const Vector2D<int> size_delta(max(delta.x, -drag_start_frame_size.width), max(delta.y, -delta_start_frame_size.height));
+        const Vector2D<int> size_delta(max(delta.x, -drag_start_frame_size.width), max(delta.y, -drag_start_frame_size.height));
         const Size<int> dest_frame_size = drag_start_frame_size + size_delta;
 
         //Resize frame
-        XResizeWindow(display, frame, dest_frame_size.width, dest_frame_size.height)
+        XResizeWindow(display, frame, dest_frame_size.width, dest_frame_size.height);
 
         //Resize client window
         XResizeWindow(display, event.window, dest_frame_size.width, dest_frame_size.height);
     }
 }
 
-void WindowManaget::OnKeyPress(const XKeyEvent& event)
+void WindowManager::OnKeyPress(const XKeyEvent& event)
 {
     if((event.state & Mod1Mask) && (event.keycode == XKeysymToKeycode(display, XK_F4)))
     {
@@ -358,7 +358,7 @@ void WindowManaget::OnKeyPress(const XKeyEvent& event)
             message.xclient.message_type = WM_PROTOCOLS;
             message.xclient.window = event.window;
             message.xclient.format = 32;
-            message.xclient.data.1[0] = WM_DELETE_WINDOW;
+            message.xclient.data.l[0] = WM_DELETE_WINDOW;
 
             //Send message to window to be closed
             CHECK(XSendEvent(display, event.window, false, 0 , &message));

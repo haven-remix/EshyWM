@@ -14,7 +14,7 @@ SOURCES = \
     eshywm.cpp
 OBJECTS = $(SOURCES:.cpp=.o)
 
-basic_wm: $(HEADERS) $(OBJECTS)
+eshywm: $(HEADERS) $(OBJECTS)
 	$(CXX) -o $@ $(OBJECTS) $(LDFLAGS)
 
 .PHONY: clean

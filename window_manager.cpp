@@ -36,7 +36,7 @@ WindowManager::~WindowManager()
 
 void WindowManager::Run()
 {
-    std::lock_guard<mutex> lock(mutex_vm_detexted);
+    std::lock_guard<std::mutex> lock(mutex_vm_detexted);
 
     b_wm_detected = false;
     XSetErrorHandler(&WindowManager::OnWMDetected);
@@ -88,7 +88,7 @@ void WindowManager::Run()
             OnCreateNotify(event.xcreatewindow);
             break;
         case DestroyNotify:
-            OnDestroyNotify(event.xdestorywindow);
+            OnDestroyNotify(event.xdestroywindow);
             break;
         case ReparentNotify:
             OnReparentNotify(event.xreparent);
@@ -115,7 +115,7 @@ void WindowManager::Run()
             OnButtonRelease(event.xbutton);
             break;
         case MotionNotify:
-            while (XCheckTypeWindowEvent(display, event.xmotion.window, MotionNotify, &event)) {}
+            while (XCheckTypedWindowEvent(display, event.xmotion.window, MotionNotify, &event)) {}
             OnMotionNotify(event.xmotion);
             break;
         case KeyPress:
@@ -164,7 +164,7 @@ void WindowManager::OnDestroyNotify(const XDestroyWindowEvent& event)
 
 }
 
-void WindowManager::OnReparentNotify(const XDestroyWindowEvent& event)
+void WindowManager::OnReparentNotify(const XReparentEvent& event)
 {
 
 }

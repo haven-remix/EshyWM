@@ -36,7 +36,7 @@ private:
     /**Event handlers*/
     void OnCreateNotify(const XCreateWindowEvent& event);
     void OnDestroyNotify(const XDestroyWindowEvent& event);
-    void OnReparentNotify(const XDestroyWindowEvent& event);
+    void OnReparentNotify(const XReparentEvent& event);
     void OnMapNotify(const XMapEvent& event);
     void OnUnmapNotify(const XUnmapEvent& event);
     void OnConfigureNotify(const XConfigureEvent& event);

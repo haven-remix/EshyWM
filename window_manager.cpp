@@ -360,12 +360,12 @@ void WindowManager::OnMotionNotify(const XMotionEvent& event)
 
 void WindowManager::OnKeyPress(const XKeyEvent& event)
 {
-    if((event.state & Mod1Mask) && (event.keycode == XKeysymToKeycode(display, XK_F4)))
+    if ((event.state & Mod1Mask) && (event.keycode == XKeysymToKeycode(display, XK_F4)))
     {
         Atom* supported_protocols;
         int num_supported_protocols;
 
-        if(XGetWMProtocols(display, event.window, &supported_protocols, &num_supported_protocols) && (std::find(supported_protocols, supported_protocols + num_supported_protocols, WM_DELETE_WINDOW) != supported_protocols + num_supported_protocols))
+        if (XGetWMProtocols(display, event.window, &supported_protocols, &num_supported_protocols) && (std::find(supported_protocols, supported_protocols + num_supported_protocols, WM_DELETE_WINDOW) != supported_protocols + num_supported_protocols))
         {
             LOG(INFO) << "Gracefully deleting window " << event.window;
 
@@ -387,7 +387,7 @@ void WindowManager::OnKeyPress(const XKeyEvent& event)
             XKillClient(display, event.window);
         }
     }
-    else if((event.state & Mod1Mask) & (event.keycode == XKeysymToKeycode(display, XK_Tab)))
+    else if ((event.state & Mod1Mask) & (event.keycode == XKeysymToKeycode(display, XK_Tab)))
     {
         //Find next window
         auto i = clients.find(event.window);
@@ -400,6 +400,11 @@ void WindowManager::OnKeyPress(const XKeyEvent& event)
         //Raise and set focus
         XRaiseWindow(display, i->second);
         XSetInputFocus(display, i->first, RevertToPointerRoot, CurrentTime);
+    }
+    else if ((event.state & Mod1Mask) && (event.keycode == XKeysymToKeycode(display, XK_Enter)))
+    {
+        //Open terminal
+        system("kitty");
     }
 }
 

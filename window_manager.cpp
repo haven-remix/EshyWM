@@ -275,10 +275,12 @@ void WindowManager::Frame(Window window, bool b_was_created_before_window_manage
     XGrabButton(display, Button1, Mod1Mask, window, false, ButtonPressMask | ButtonReleaseMask | ButtonMotionMask, GrabModeAsync, GrabModeAsync, None, None);
     //Right windows with alt + right button
     XGrabButton(display, Button3, Mod1Mask, window, false, ButtonPressMask | ButtonReleaseMask | ButtonMotionMask, GrabModeAsync, GrabModeAsync, None, None);
-    //Kill windows with alt + f4 button
+    //Kill windows with alt + f4
     XGrabKey(display, XKeysymToKeycode(display, XK_F4), Mod1Mask, window, false, GrabModeAsync, GrabModeAsync);
-    //Switch windows with alt + tab button
+    //Switch windows with alt + tab
     XGrabKey(display, XKeysymToKeycode(display, XK_Tab), Mod1Mask, window, false, GrabModeAsync, GrabModeAsync);
+    //Open terminal with alt + enter
+    XGrabKey(display, XKeysymToKeycode(display, XK_Enter), Mod1Mask, window, false, GrabModeAsync, GrabModeAsync);
 
     LOG(INFO) << "Framed window " << window << " [" << frame << "]";
 }

@@ -54,7 +54,7 @@ private:
     static bool b_wm_detected;
 
     /**Mutex for protecting b_vm_detected*/
-    static std::mutex::mutex mutex_vm_detexted;
+    static std::mutex mutex_vm_detexted;
 
     /**Cursor position at the start of a window move/resize*/
     Position<int> drag_start_position;
@@ -66,4 +66,4 @@ private:
     /**Atom constants*/
     const Atom WM_PROTOCOLS;
     const Atom WM_DELETE_WINDOW;
-}
+};

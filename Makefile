@@ -1,9 +1,22 @@
-PREFIX?=/usr/X11R6
-CFLAGS?=-Os -pedantic -Wall
+CXXFLAGS ?= -Wall -g
+CXXFLAGS += -std=c++1y
+CXXFLAGS += `pkg-config --cflags x11 libglog`
+LDFLAGS += `pkg-config --libs x11 libglog`
 
-all:
-	$(CC) $(CFLAGS) -I$(PREFIX)/include tinywm.c -L$(PREFIX)/lib -lX11 -o tinywm
+all: eshywm
 
+HEADERS = \
+    util.h \
+    window_manager.h
+SOURCES = \
+    util.cpp \
+    window_manager.cpp \
+    eshywm.cpp
+OBJECTS = $(SOURCES:.cpp=.o)
+
+basic_wm: $(HEADERS) $(OBJECTS)
+	$(CXX) -o $@ $(OBJECTS) $(LDFLAGS)
+
+.PHONY: clean
 clean:
-	rm -f tinywm
-
+	rm -f eshywm $(OBJECTS)

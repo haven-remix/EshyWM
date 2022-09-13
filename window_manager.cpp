@@ -6,6 +6,7 @@ extern "C" {
 
 #include <glog/logging.h>
 #include <cstring>
+#include <iostream>
 #include <algorithm>
 
 bool WindowManager::b_wm_detected;
@@ -235,12 +236,12 @@ void WindowManager::OnMapRequest(const XMapRequestEvent& event)
 void WindowManager::Frame(Window window, bool b_was_created_before_window_manager)
 {
     //Visual properties of the frame
-    const unsigned int BORDER_WIDTH = 3;
-    const unsigned long BORDER_COLOR = 0xff0000;
-    const unsigned long BG_COLOR = 0x0000ff;
+    const unsigned int BORDER_WIDTH = 5;
+    const unsigned long BORDER_COLOR = 0xc461e8;
+    const unsigned long BG_COLOR = 0xc461e8;
 
     //Retrieve attributes of window to frame
-    XWindowAttributes x_window_attributes;
+    XWindowAttributes x_window_attributes = {0};
     CHECK(XGetWindowAttributes(display, window, &x_window_attributes));
 
     //If window was created before window manager started, we should frame it only if it is visible and does not set override_redirect
@@ -271,16 +272,16 @@ void WindowManager::Frame(Window window, bool b_was_created_before_window_manage
     clients[window] = frame;
 
     //Grab events for window management actions on client window
+    //Raise windows with left button
+    XGrabButton(display, Button1, 0, window, false, ButtonPressMask, GrabModeSync, GrabModeAsync, None, None);
     //Move windows with alt + left button
     XGrabButton(display, Button1, Mod1Mask, window, false, ButtonPressMask | ButtonReleaseMask | ButtonMotionMask, GrabModeAsync, GrabModeAsync, None, None);
-    //Right windows with alt + right button
+    //Resize windows with alt + right button
     XGrabButton(display, Button3, Mod1Mask, window, false, ButtonPressMask | ButtonReleaseMask | ButtonMotionMask, GrabModeAsync, GrabModeAsync, None, None);
     //Kill windows with alt + f4
     XGrabKey(display, XKeysymToKeycode(display, XK_F4), Mod1Mask, window, false, GrabModeAsync, GrabModeAsync);
     //Switch windows with alt + tab
     XGrabKey(display, XKeysymToKeycode(display, XK_Tab), Mod1Mask, window, false, GrabModeAsync, GrabModeAsync);
-    //Switch windows with alt + enter
-    XGrabKey(display, XKeysymToKeycode(display, XK_KP_Enter), Mod1Mask, window, false, GrabModeAsync, GrabModeAsync);
 
     LOG(INFO) << "Framed window " << window << " [" << frame << "]";
 }
@@ -326,8 +327,11 @@ void WindowManager::OnButtonPress(const XButtonEvent& event)
     drag_start_frame_position = Position<int>(x, y);
     drag_start_frame_size = Size<int>(width, height);
 
-    //Raise clicked window to top
+    //Raise clicked window to top and set focus
     XRaiseWindow(display, frame);
+    XSetInputFocus(display, frame, RevertToPointerRoot, event.time);
+    //Pass the click event through
+    XAllowEvents(display, ReplayPointer, event.time);
 }
 
 void WindowManager::OnButtonRelease(const XButtonEvent& event)
@@ -402,10 +406,6 @@ void WindowManager::OnKeyPress(const XKeyEvent& event)
         //Raise and set focus
         XRaiseWindow(display, i->second);
         XSetInputFocus(display, i->first, RevertToPointerRoot, CurrentTime);
-    }
-    else if ((event.state & Mod1Mask) & (event.keycode == XKeysymToKeycode(display, XK_KP_Enter)))
-    {
-        system("kitty");
     }
 }
 

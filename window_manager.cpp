@@ -1,4 +1,5 @@
 #include "window_manager.h"
+#include "eshywm.h"
 
 extern "C" {
 #include <X11/Xutil.h>
@@ -44,7 +45,7 @@ void WindowManager::Run()
 
     b_wm_detected = false;
     XSetErrorHandler(&WindowManager::OnWMDetected);
-    XSelectInput(display, root, SubstructureRedirectMask | SubstructureNotifyMask);
+    XSelectInput(display, root, SubstructureRedirectMask | SubstructureNotifyMask | StructureNotifyMask);
     XSync(display, false);
 
     if(b_wm_detected)
@@ -127,7 +128,7 @@ void WindowManager::Run()
             break;
         case KeyRelease:
             OnKeyRelease(event.xkey);
-            break;        
+            break;
         default:
             LOG(WARNING) << "Ignored event";
         }
@@ -175,7 +176,11 @@ void WindowManager::OnReparentNotify(const XReparentEvent& event)
 
 void WindowManager::OnConfigureNotify(const XConfigureEvent& event)
 {
-
+    if(event.window == root)
+    {
+        //Notify screen resolution changed
+        EshyWM::on_screen_resolution_changed();
+    }
 }
 
 void WindowManager::OnMapNotify(const XMapEvent& event)
@@ -236,7 +241,7 @@ void WindowManager::OnMapRequest(const XMapRequestEvent& event)
 void WindowManager::Frame(Window window, bool b_was_created_before_window_manager)
 {
     //Visual properties of the frame
-    const unsigned int BORDER_WIDTH = 5;
+    const unsigned int BORDER_WIDTH = 0;
     const unsigned long BORDER_COLOR = 0xc461e8;
     const unsigned long BG_COLOR = 0xc461e8;
 

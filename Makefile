@@ -7,11 +7,13 @@ all: eshywm
 
 HEADERS = \
     util.h \
-    window_manager.h
+    window_manager.h \
+    eshywm.h
 SOURCES = \
     util.cpp \
     window_manager.cpp \
-    eshywm.cpp
+    eshywm.cpp \
+    main.cpp
 OBJECTS = $(SOURCES:.cpp=.o)
 
 eshywm: $(HEADERS) $(OBJECTS)

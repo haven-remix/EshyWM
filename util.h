@@ -22,27 +22,27 @@ struct size {
     std::string to_string() const;
 };
 
-struct window_data {
+struct window_size_data {
     int x;
     int y;
 	unsigned int width;
 	unsigned int height;
 
-    window_data() = default;
+    window_size_data() = default;
     
-    window_data(int _x, int _y)
+    window_size_data(int _x, int _y)
       : x(_x)
       , y(_y)
     {}
 
-	window_data(int _x, int _y, unsigned int _width, unsigned int _height)
+	window_size_data(int _x, int _y, unsigned int _width, unsigned int _height)
       : x(_x)
       , y(_y)
 	  , width(_width)
 	  , height(_height)
     {}
 
-    std::string to_string() const;
+    //std::string to_string() const;
 };
 
 // Outputs a size<T> as a string to a std::ostream.
@@ -142,12 +142,12 @@ std::string size<T>::to_string() const
 	return out.str();
 }
 
-std::string window_data::to_string() const
-{
-	std::ostringstream out;
-	out << "position: " << x << ", " << y << " size: " << width << "x" << height;
-	return out.str();
-}
+// std::string window_data::to_string() const
+// {
+// 	std::ostringstream out;
+// 	out << "position: " << x << ", " << y << " size: " << width << "x" << height;
+// 	return out.str();
+// }
 
 template <typename T>
 std::ostream& operator << (std::ostream& out, const size<T>& size)

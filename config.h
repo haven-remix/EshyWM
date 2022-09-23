@@ -11,8 +11,13 @@ public:
         , window_frame_border_width(0)
         , window_frame_border_color(0)
         , window_background_color(0)
+        , b_floating_mode(false)
         , background_path("")
     {}
+
+    /**From config file*/
+
+    int window_padding;
 
     int resize_step_size_width;
     int resize_step_size_height;
@@ -23,4 +28,8 @@ public:
     long window_background_color;
 
     std::string background_path;
+
+    /**Runtime*/
+
+    bool b_floating_mode;
 };

@@ -84,86 +84,96 @@ void EshyWMWindow::setup_grab_events(bool b_was_created_before_window_manager)
 }
 
 
-void EshyWMWindow::reisze_window_horizontal_left_arrow()
+void EshyWMWindow::resize_window_horizontal_left_arrow()
 {
-    window_data window_size = get_window_size();
+    window_size_data window_size = get_window_size();
 
-    switch(WindowSlot)
+    if(slot_data->get_horizontal_slot() == 0)
     {
-    case EScreenSlot::SS_Left:
         window_size.width -= get_resize_step_horizontal();
-        break;
-    case EScreenSlot::SS_Right:
+    }
+    else if (slot_data->get_horizontal_slot() != 0 && slot_data->get_horizontal_slot() != EshyWM::get_window_manager()->get_num_horizontal_slots() - 1)
+    {
+        window_size.width -= get_resize_step_horizontal() * 2;
+        window_size.x += get_resize_step_horizontal();
+    }
+    else if(slot_data->get_horizontal_slot() == EshyWM::get_window_manager()->get_num_horizontal_slots() - 1)
+    {
         window_size.width += get_resize_step_horizontal();
         window_size.x -= get_resize_step_horizontal();
-        break;
-    };
+    }
 
     XMoveResizeWindow(display, window, window_size.x, window_size.y, window_size.width, window_size.height);
 }
 
-void EshyWMWindow::reisze_window_horizontal_right_arrow()
+void EshyWMWindow::resize_window_horizontal_right_arrow()
 {
-    window_data window_size = get_window_size();
+    window_size_data window_size = get_window_size();
 
-    switch(WindowSlot)
+    if(slot_data->get_horizontal_slot() == 0)
     {
-    case EScreenSlot::SS_Left:
         window_size.width += get_resize_step_horizontal();
-        break;
-    case EScreenSlot::SS_Right:
+    }
+    else if (slot_data->get_horizontal_slot() != 0 && slot_data->get_horizontal_slot() != EshyWM::get_window_manager()->get_num_horizontal_slots() - 1)
+    {
+        window_size.width += get_resize_step_horizontal() * 2;
+        window_size.x -= get_resize_step_horizontal();
+    }
+    else if(slot_data->get_horizontal_slot() == EshyWM::get_window_manager()->get_num_horizontal_slots() - 1)
+    {
         window_size.width -= get_resize_step_horizontal();
         window_size.x += get_resize_step_horizontal();
-        break;
-    };
+    }
 
     XMoveResizeWindow(display, window, window_size.x, window_size.y, window_size.width, window_size.height);
 }
 
-void EshyWMWindow::reisze_window_vertical_up_arrow()
+void EshyWMWindow::resize_window_vertical_up_arrow()
 {
-    window_data window_size = get_window_size();
+    window_size_data window_size = get_window_size();
 
-    switch(WindowSlot)
+    if(slot_data->get_vertical_slot() == 0)
     {
-    case EScreenSlot::SS_Top:
         window_size.height -= get_resize_step_vertical();
-        break;
-    case EScreenSlot::SS_Bottom:
+    }
+    else if (slot_data->get_vertical_slot() != 0 && slot_data->get_vertical_slot() != EshyWM::get_window_manager()->get_num_vertical_slots() - 1)
+    {
+        window_size.height += get_resize_step_vertical() * 2;
+        window_size.y -= get_resize_step_vertical();
+    }
+    else if(slot_data->get_vertical_slot() == EshyWM::get_window_manager()->get_num_vertical_slots() - 1)
+    {
         window_size.height += get_resize_step_vertical();
         window_size.y -= get_resize_step_vertical();
-        break;
-    default:
-        window_size.height -= get_resize_step_vertical();
-        break;
-    };
+    }
 
     XMoveResizeWindow(display, window, window_size.x, window_size.y, window_size.width, window_size.height);
 }
 
-void EshyWMWindow::reisze_window_vertical_down_arrow()
+void EshyWMWindow::resize_window_vertical_down_arrow()
 {
-    window_data window_size = get_window_size();
+    window_size_data window_size = get_window_size();
 
-    switch(WindowSlot)
+    if(slot_data->get_vertical_slot() == 0)
     {
-    case EScreenSlot::SS_Top:
         window_size.height += get_resize_step_vertical();
-        break;
-    case EScreenSlot::SS_Bottom:
+    }
+    else if (slot_data->get_vertical_slot() != 0 && slot_data->get_vertical_slot() != EshyWM::get_window_manager()->get_num_vertical_slots() - 1)
+    {
+        window_size.height -= get_resize_step_vertical() * 2;
+        window_size.y += get_resize_step_vertical();
+    }
+    else if(slot_data->get_vertical_slot() == EshyWM::get_window_manager()->get_num_vertical_slots() - 1)
+    {
         window_size.height -= get_resize_step_vertical();
         window_size.y += get_resize_step_vertical();
-        break;
-    default:
-        window_size.height += get_resize_step_vertical();
-        break;
-    };
-
+    }
+    
     XMoveResizeWindow(display, window, window_size.x, window_size.y, window_size.width, window_size.height);
 }
 
 
-window_data EshyWMWindow::get_window_size()
+window_size_data EshyWMWindow::get_window_size()
 {
     Window return_window;
     int x;
@@ -173,7 +183,7 @@ window_data EshyWMWindow::get_window_size()
     unsigned int height;
 
     XGetGeometry(display, window, &return_window, &x, &y, &width, &height, &unsigned_null, &unsigned_null);
-    return window_data(x, y, width, height);
+    return window_size_data(x, y, width, height);
 }
 
 int EshyWMWindow::get_resize_step_horizontal()

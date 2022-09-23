@@ -1,4 +1,5 @@
 #include "window_manager.h"
+#include "window_data.h"
 #include "eshywm.h"
 #include "config.h"
 
@@ -27,9 +28,11 @@ WindowManager* WindowManager::Create(const std::string& display_str)
     return new WindowManager(display);
 }
 
-WindowManager::WindowManager(Display* display) 
+WindowManager::WindowManager(Display* display)
     : display(CHECK_NOTNULL(display))
     , root(DefaultRootWindow(display))
+    , num_horizontal_slots(0)
+    , num_vertical_slots(0)
     , WM_PROTOCOLS(XInternAtom(display, "WM_PROTOCOLS", false))
     , WM_DELETE_WINDOW(XInternAtom(display, "WM_DELETE_WINDOW", false))
 {
@@ -72,9 +75,12 @@ void WindowManager::Run()
     //Register, frame, and setup grab events for each top level window
     for(unsigned int i = 0; i < num_top_level_windows; ++i)
     {
-        EshyWMWindow* window = register_window(top_level_windows[i]);
-        window->frame_window(true);
-        window->setup_grab_events(true);
+        if(EshyWMWindow* window = register_window(top_level_windows[i], true))
+        {
+            window->frame_window(true);
+            window->setup_grab_events(true);
+            initialize_window(top_level_windows[i], true);
+        }
     }
 
     //Free top-level window array
@@ -171,14 +177,7 @@ void WindowManager::OnCreateNotify(const XCreateWindowEvent& event)
 
 void WindowManager::OnDestroyNotify(const XDestroyWindowEvent& event)
 {
-    for(auto it = window_list.begin(); it != window_list.end(); ++it)
-    {
-        if(it->first == event.window)
-        {
-            window_list.erase(it++);
-            break;
-        }
-    }
+    unregister_window(event.window);
 }
 
 void WindowManager::OnReparentNotify(const XReparentEvent& event)
@@ -216,13 +215,11 @@ void WindowManager::OnUnmapNotify(const XUnmapEvent& event)
         return;
     }
 
-    window_list[event.window]->unframe_window();
+    window_list[event.window]->get_eshywm_window()->unframe_window();
 }
 
 void WindowManager::OnConfigureRequest(const XConfigureRequestEvent& event)
 {
-    std::cout << "cr" << std::endl;
-
     XWindowChanges changes;
     changes.x = event.x;
     changes.y = event.y;
@@ -246,10 +243,11 @@ void WindowManager::OnConfigureRequest(const XConfigureRequestEvent& event)
 
 void WindowManager::OnMapRequest(const XMapRequestEvent& event)
 {
-    register_window(event.window);
+    register_window(event.window, false);
     //Frame or reframe window and setup grap events
-    window_list[event.window]->frame_window(false);
-    window_list[event.window]->setup_grab_events(false);
+    window_list[event.window]->get_eshywm_window()->frame_window(false);
+    window_list[event.window]->get_eshywm_window()->setup_grab_events(false);
+    initialize_window(event.window, false);
     //Map window
     XMapWindow(display, event.window);
 }
@@ -343,6 +341,7 @@ void WindowManager::OnKeyPress(const XKeyEvent& event)
     }
     else if ((event.state & Mod1Mask) && (event.keycode == XKeysymToKeycode(display, XK_Tab)))
     {
+        std::unordered_map<int, int> asdf;
         //Find next window
         auto i = window_list.find(event.window);
         CHECK(i != window_list.end());
@@ -351,26 +350,26 @@ void WindowManager::OnKeyPress(const XKeyEvent& event)
         {
             i = window_list.begin();
         }
-        
+
         //Raise and set focus
         XRaiseWindow(display, i->first);
         XSetInputFocus(display, i->first, RevertToPointerRoot, CurrentTime);
     }
     else if((event.state & Mod1Mask) && (event.keycode == XKeysymToKeycode(display, XK_Left)))
     {
-        window_list[event.window]->reisze_window_horizontal_left_arrow();
+        window_list[event.window]->get_eshywm_window()->resize_window_horizontal_left_arrow();
     }
     else if((event.state & Mod1Mask) && (event.keycode == XKeysymToKeycode(display, XK_Right)))
     {
-        window_list[event.window]->reisze_window_horizontal_right_arrow();
+        window_list[event.window]->get_eshywm_window()->resize_window_horizontal_right_arrow();
     }
     else if((event.state & Mod1Mask) && (event.keycode == XKeysymToKeycode(display, XK_Up)))
     {
-        window_list[event.window]->reisze_window_vertical_up_arrow();
+        window_list[event.window]->get_eshywm_window()->resize_window_vertical_up_arrow();
     }
     else if((event.state & Mod1Mask) && (event.keycode == XKeysymToKeycode(display, XK_Down)))
     {
-        window_list[event.window]->reisze_window_vertical_down_arrow();
+        window_list[event.window]->get_eshywm_window()->resize_window_vertical_down_arrow();
     }
 }
 
@@ -380,9 +379,58 @@ void WindowManager::OnKeyRelease(const XKeyEvent& event)
 }
 
 
-EshyWMWindow* WindowManager::register_window(Window window)
+EshyWMWindow* WindowManager::register_window(Window window, bool b_was_created_before_window_manager)
 {
+    //Retrieve attributes of window to frame
+    XWindowAttributes x_window_attributes = {0};
+    CHECK(XGetWindowAttributes(display, window, &x_window_attributes));
+
+    //If window was created before window manager started, we should frame it only if it is visible and does not set override_redirect
+    if(b_was_created_before_window_manager && (x_window_attributes.override_redirect || x_window_attributes.map_state != IsViewable))
+    {
+        return nullptr;
+    }
+
     EshyWMWindow* new_window = new EshyWMWindow(display, window);
-    window_list.emplace(window, new_window);
+    window_data* new_window_data = new window_data(window, new_window);
+    new_window_data->update_internal_window_data(new_window_data);
+    window_list.emplace(window, new_window_data);
     return new_window;
+}
+
+void WindowManager::unregister_window(Window window)
+{
+    if(window_list.count(window))
+    {
+        num_horizontal_slots--;
+        window_list.erase(window);
+    }
+}
+
+void WindowManager::initialize_window(Window window, bool b_was_created_before_window_manager)
+{
+    //Retrieve attributes of window to frame
+    XWindowAttributes x_window_attributes = {0};
+    CHECK(XGetWindowAttributes(display, window, &x_window_attributes));
+
+    //If window was created before window manager started, we should frame it only if it is visible and does not set override_redirect
+    if(b_was_created_before_window_manager && (x_window_attributes.override_redirect || x_window_attributes.map_state != IsViewable))
+    {
+        return;
+    }
+
+    if(window_list.count(window))
+    {
+        window_data* data = window_list[window];
+
+        if(!EshyWM::get_eshywm_config()->b_floating_mode)
+        {
+            data->set_floating(false);
+            data->set_horizontal_slot(num_horizontal_slots);
+            //data->set_vertical_slot(num_vertical_slots);
+            num_horizontal_slots++;
+            //num_vertical_slots++;
+        }
+        else data->set_floating(true);
+    }
 }

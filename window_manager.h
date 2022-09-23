@@ -13,6 +13,8 @@ extern "C" {
 #include "util.h"
 #include "window.h"
 
+typedef std::unordered_map<Window, window_data*> window_map;
+
 class WindowManager
 {
 public:
@@ -25,11 +27,20 @@ public:
 
     const Window get_root() const {return root;}
 
+    int get_num_horizontal_slots() const {return num_horizontal_slots;}
+    int get_num_vertical_slots() const {return num_vertical_slots;}
+
+    window_map& get_window_list() {return window_list;}
+
 private:
 
     WindowManager(Display* display);
     Display* display;
     const Window root;
+
+    /**Current slots information*/
+    int num_horizontal_slots;
+    int num_vertical_slots;
 
     /**Mutex for protecting b_wm_detected*/
     static std::mutex mutex_wm_detected;
@@ -46,7 +57,7 @@ private:
     const Atom WM_DELETE_WINDOW;
 
     /**A list of windows, this will only contain the displayed window*/
-    std::unordered_map<Window, EshyWMWindow*> window_list;
+    window_map window_list;
 
     /**Frame handlers*/
     void Frame(Window window, bool b_was_created_before_window_manager);
@@ -73,5 +84,8 @@ private:
     static bool b_wm_detected;
 
     /**Helper functions*/
-    EshyWMWindow* register_window(Window window);
+    EshyWMWindow* register_window(Window window, bool b_was_created_before_window_manager);
+    void unregister_window(Window window);
+    /**Initializes the slot, location, and size*/
+    void initialize_window(Window window, bool b_was_created_before_window_manager);
 };

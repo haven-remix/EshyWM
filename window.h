@@ -5,15 +5,7 @@ extern "C" {
 }
 
 #include "util.h"
-
-enum class EScreenSlot
-{
-    SS_None,    //Used for floating
-    SS_Left,
-    SS_Right,
-    SS_Top,
-    SS_Bottom
-};
+#include "window_data.h"
 
 class EshyWMWindow
 {
@@ -22,7 +14,7 @@ public:
     EshyWMWindow(Display* _display, Window _window)
         : display(_display)
         , window(_window)
-        , WindowSlot(EScreenSlot::SS_Right)
+        , slot_data(nullptr)
     {}
 
     void frame_window(bool b_was_created_before_window_manager);
@@ -30,12 +22,12 @@ public:
 
     void setup_grab_events(bool b_was_created_before_window_manager);
 
-    void reisze_window_horizontal_left_arrow();
-    void reisze_window_horizontal_right_arrow();
-    void reisze_window_vertical_up_arrow();
-    void reisze_window_vertical_down_arrow();
+    void set_window_data(window_data* new_window_data) {slot_data = new_window_data;}
 
-    EScreenSlot WindowSlot;
+    void resize_window_horizontal_left_arrow();
+    void resize_window_horizontal_right_arrow();
+    void resize_window_vertical_up_arrow();
+    void resize_window_vertical_down_arrow();
 
 private:
 
@@ -43,8 +35,10 @@ private:
     Window window;
     Window frame;
 
+    window_data* slot_data;
+
     int get_resize_step_horizontal();
     int get_resize_step_vertical();
 
-    window_data get_window_size();
+    window_size_data get_window_size();
 };

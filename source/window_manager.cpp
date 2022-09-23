@@ -8,6 +8,7 @@ extern "C" {
 }
 
 #include <glog/logging.h>
+
 #include <cstring>
 #include <iostream>
 #include <algorithm>

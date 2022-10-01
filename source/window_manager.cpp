@@ -1,5 +1,5 @@
 #include "window_manager.h"
-#include "window_data.h"
+#include "window_position_data.h"
 #include "eshywm.h"
 #include "config.h"
 
@@ -15,10 +15,12 @@ extern "C" {
 
 bool WindowManager::b_wm_detected;
 std::mutex WindowManager::mutex_wm_detected;
+Display* WindowManager::display;
 
-WindowManager* WindowManager::Create(const std::string& display_str)
+
+std::shared_ptr<WindowManager> WindowManager::Create(const std::string& display_str)
 {
-    Display* display = XOpenDisplay(display_str.empty() ? nullptr : display_str.c_str());
+    display = XOpenDisplay(display_str.empty() ? nullptr : display_str.c_str());
 
     if(display == nullptr)
     {
@@ -26,23 +28,23 @@ WindowManager* WindowManager::Create(const std::string& display_str)
         return nullptr;
     }
 
-    return new WindowManager(display);
+    return std::make_shared<WindowManager>();
 }
 
-WindowManager::WindowManager(Display* display)
-    : display(CHECK_NOTNULL(display))
-    , root(DefaultRootWindow(display))
-    , num_horizontal_slots(0)
-    , num_vertical_slots(0)
-    , WM_PROTOCOLS(XInternAtom(display, "WM_PROTOCOLS", false))
+WindowManager::WindowManager()
+    : WM_PROTOCOLS(XInternAtom(display, "WM_PROTOCOLS", false))
     , WM_DELETE_WINDOW(XInternAtom(display, "WM_DELETE_WINDOW", false))
+    , root(DefaultRootWindow(display))
 {
+    num_horizontal_slots = 0;
+    num_vertical_slots = 0;
 }
 
 WindowManager::~WindowManager()
 {
     XCloseDisplay(display);
 }
+
 
 void WindowManager::Run()
 {
@@ -76,12 +78,8 @@ void WindowManager::Run()
     //Register, frame, and setup grab events for each top level window
     for(unsigned int i = 0; i < num_top_level_windows; ++i)
     {
-        if(EshyWMWindow* window = register_window(top_level_windows[i], true))
-        {
-            window->frame_window(true);
-            window->setup_grab_events(true);
-            initialize_window(top_level_windows[i], true);
-        }
+        register_window(top_level_windows[i], true);
+        initialize_window(top_level_windows[i], true);
     }
 
     //Free top-level window array
@@ -101,17 +99,8 @@ void WindowManager::Run()
         //Dispatch event
         switch (event.type)
         {
-        case CreateNotify:
-            OnCreateNotify(event.xcreatewindow);
-            break;
         case DestroyNotify:
             OnDestroyNotify(event.xdestroywindow);
-            break;
-        case ReparentNotify:
-            OnReparentNotify(event.xreparent);
-            break;
-        case MapNotify:
-            OnMapNotify(event.xmap);
             break;
         case UnmapNotify:
             OnUnmapNotify(event.xunmap);
@@ -128,9 +117,6 @@ void WindowManager::Run()
         case ButtonPress:
             OnButtonPress(event.xbutton);
             break;
-        case ButtonRelease:
-            OnButtonRelease(event.xbutton);
-            break;
         case MotionNotify:
             while (XCheckTypedWindowEvent(display, event.xmotion.window, MotionNotify, &event)) {}
             OnMotionNotify(event.xmotion);
@@ -138,14 +124,12 @@ void WindowManager::Run()
         case KeyPress:
             OnKeyPress(event.xkey);
             break;
-        case KeyRelease:
-            OnKeyRelease(event.xkey);
-            break;
         default:
             LOG(WARNING) << "Ignored event";
         }
     }
 }
+
 
 int WindowManager::OnWMDetected(Display* display, XErrorEvent* event)
 {
@@ -171,19 +155,10 @@ int WindowManager::OnXError(Display* display, XErrorEvent* event)
     return 0;
 }
 
-void WindowManager::OnCreateNotify(const XCreateWindowEvent& event)
-{
-    
-}
 
 void WindowManager::OnDestroyNotify(const XDestroyWindowEvent& event)
 {
     unregister_window(event.window);
-}
-
-void WindowManager::OnReparentNotify(const XReparentEvent& event)
-{
-    //std::cout << "reparent" << std::endl;
 }
 
 void WindowManager::OnConfigureNotify(const XConfigureEvent& event)
@@ -191,13 +166,8 @@ void WindowManager::OnConfigureNotify(const XConfigureEvent& event)
     if(event.window == root)
     {
         //Notify screen resolution changed
-        EshyWM::on_screen_resolution_changed();
+        EshyWM::Get().on_screen_resolution_changed();
     }
-}
-
-void WindowManager::OnMapNotify(const XMapEvent& event)
-{
-    //std::cout << "map notify" << std::endl;
 }
 
 void WindowManager::OnUnmapNotify(const XUnmapEvent& event)
@@ -216,7 +186,7 @@ void WindowManager::OnUnmapNotify(const XUnmapEvent& event)
         return;
     }
 
-    window_list[event.window]->get_eshywm_window()->unframe_window();
+    window_list[event.window]->unframe_window();
 }
 
 void WindowManager::OnConfigureRequest(const XConfigureRequestEvent& event)
@@ -245,9 +215,6 @@ void WindowManager::OnConfigureRequest(const XConfigureRequestEvent& event)
 void WindowManager::OnMapRequest(const XMapRequestEvent& event)
 {
     register_window(event.window, false);
-    //Frame or reframe window and setup grap events
-    window_list[event.window]->get_eshywm_window()->frame_window(false);
-    window_list[event.window]->get_eshywm_window()->setup_grab_events(false);
     initialize_window(event.window, false);
     //Map window
     XMapWindow(display, event.window);
@@ -255,8 +222,7 @@ void WindowManager::OnMapRequest(const XMapRequestEvent& event)
 
 void WindowManager::OnButtonPress(const XButtonEvent& event)
 {
-    CHECK(window_list[event.window]);
-    const Window frame = event.window;
+    const Window frame = window_list[event.window] ? window_list[event.window]->get_frame() : event.window;
 
     //Save initial cursor position
     drag_start_position = Position<int>(event.x_root, event.y_root);
@@ -281,22 +247,17 @@ void WindowManager::OnButtonPress(const XButtonEvent& event)
     XAllowEvents(display, ReplayPointer, event.time);
 }
 
-void WindowManager::OnButtonRelease(const XButtonEvent& event)
-{
-
-}
-
 void WindowManager::OnMotionNotify(const XMotionEvent& event)
 {
     CHECK(window_list.count(event.window));
-    const Window frame = event.window;
+    const Window window = window_list[event.window] ? window_list[event.window]->get_frame() : event.window;
     const Position<int> drag_position(event.x_root, event.y_root);
     const Vector2D<int> delta = drag_position - drag_start_position;
 
     if(event.state & Button1Mask)
     {
         const Position<int> dest_frame_position = drag_start_frame_position + delta;
-        XMoveWindow(display, frame, dest_frame_position.x, dest_frame_position.y);
+        XMoveWindow(display, window, dest_frame_position.x, dest_frame_position.y);
     }
     else if(event.state & Button3Mask)
     {
@@ -304,7 +265,7 @@ void WindowManager::OnMotionNotify(const XMotionEvent& event)
         const size<int> dest_frame_size = drag_start_frame_size + size_delta;
 
         //Resize frame
-        XResizeWindow(display, frame, dest_frame_size.width, dest_frame_size.height);
+        XResizeWindow(display, window, dest_frame_size.width, dest_frame_size.height);
 
         //Resize client window
         XResizeWindow(display, event.window, dest_frame_size.width, dest_frame_size.height);
@@ -358,25 +319,20 @@ void WindowManager::OnKeyPress(const XKeyEvent& event)
     }
     else if((event.state & Mod1Mask) && (event.keycode == XKeysymToKeycode(display, XK_Left)))
     {
-        window_list[event.window]->get_eshywm_window()->resize_window_horizontal_left_arrow();
+        window_list[event.window]->resize_window_horizontal_left_arrow();
     }
     else if((event.state & Mod1Mask) && (event.keycode == XKeysymToKeycode(display, XK_Right)))
     {
-        window_list[event.window]->get_eshywm_window()->resize_window_horizontal_right_arrow();
+        window_list[event.window]->resize_window_horizontal_right_arrow();
     }
     else if((event.state & Mod1Mask) && (event.keycode == XKeysymToKeycode(display, XK_Up)))
     {
-        window_list[event.window]->get_eshywm_window()->resize_window_vertical_up_arrow();
+        window_list[event.window]->resize_window_vertical_up_arrow();
     }
     else if((event.state & Mod1Mask) && (event.keycode == XKeysymToKeycode(display, XK_Down)))
     {
-        window_list[event.window]->get_eshywm_window()->resize_window_vertical_down_arrow();
+        window_list[event.window]->resize_window_vertical_down_arrow();
     }
-}
-
-void WindowManager::OnKeyRelease(const XKeyEvent& event)
-{
-    
 }
 
 
@@ -392,15 +348,17 @@ EshyWMWindow* WindowManager::register_window(Window window, bool b_was_created_b
         return nullptr;
     }
 
-    EshyWMWindow* new_window = new EshyWMWindow(display, window);
-    window_data* new_window_data = new window_data(window, new_window);
-    new_window_data->update_internal_window_data(new_window_data);
-    window_list.emplace(window, new_window_data);
+    EshyWMWindow* new_window = new EshyWMWindow(window);
+    new_window->frame_window(b_was_created_before_window_manager);
+    new_window->setup_grab_events(b_was_created_before_window_manager);
+    window_list.emplace(window, new_window);
+
     return new_window;
 }
 
 void WindowManager::unregister_window(Window window)
 {
+    //@fixme: totally broken, window_list now contains frames
     if(window_list.count(window))
     {
         num_horizontal_slots--;
@@ -422,9 +380,9 @@ void WindowManager::initialize_window(Window window, bool b_was_created_before_w
 
     if(window_list.count(window))
     {
-        window_data* data = window_list[window];
+        window_position_data* data = window_list[window]->get_widnow_position_data();
 
-        if(!EshyWM::get_eshywm_config()->b_floating_mode)
+        if(!EshyWM::get_current_config()->b_floating_mode)
         {
             data->set_floating(false);
             data->set_horizontal_slot(num_horizontal_slots);

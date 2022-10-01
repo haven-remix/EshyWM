@@ -5,5 +5,5 @@
 int main(int argc, char** argv)
 {
     google::InitGoogleLogging(argv[0]);
-    return EshyWM::initialize();
+    return EshyWM::Get().initialize();
 }

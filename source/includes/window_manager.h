@@ -13,29 +13,36 @@ extern "C" {
 #include "util.h"
 #include "window.h"
 
-typedef std::unordered_map<Window, window_data*> window_map;
+typedef std::unordered_map<Window, EshyWMWindow*> window_map;
+
+struct window_manager_data
+{
+    bool b_floating_mode;
+};
 
 class WindowManager
 {
 public:
 
-    static WindowManager* Create(const std::string& display_str = std::string());
-
+    WindowManager();
     ~WindowManager();
+
+    static std::shared_ptr<WindowManager> Create(const std::string& display_str = std::string());
 
     void Run();
 
-    const Window get_root() const {return root;}
+    /**Getters*/
+    static Display* get_display() {return display;}
+    const Window get_root() {return root;}
 
-    int get_num_horizontal_slots() const {return num_horizontal_slots;}
-    int get_num_vertical_slots() const {return num_vertical_slots;}
+    int get_num_horizontal_slots() {return num_horizontal_slots;}
+    int get_num_vertical_slots() {return num_vertical_slots;}
 
     window_map& get_window_list() {return window_list;}
 
 private:
 
-    WindowManager(Display* display);
-    Display* display;
+    static Display* display;
     const Window root;
 
     /**Current slots information*/
@@ -56,7 +63,7 @@ private:
     const Atom WM_PROTOCOLS;
     const Atom WM_DELETE_WINDOW;
 
-    /**A list of windows, this will only contain the displayed window*/
+    /**A list of windows, this will only contain the frames of the displayed window*/
     window_map window_list;
 
     /**Frame handlers*/
@@ -64,19 +71,14 @@ private:
     void Unframe(Window window);
 
     /**Event handlers*/
-    void OnCreateNotify(const XCreateWindowEvent& event);
     void OnDestroyNotify(const XDestroyWindowEvent& event);
-    void OnReparentNotify(const XReparentEvent& event);
-    void OnMapNotify(const XMapEvent& event);
     void OnUnmapNotify(const XUnmapEvent& event);
     void OnConfigureNotify(const XConfigureEvent& event);
     void OnMapRequest(const XMapRequestEvent& event);
     void OnConfigureRequest(const XConfigureRequestEvent& event);
     void OnButtonPress(const XButtonEvent& event);
-    void OnButtonRelease(const XButtonEvent& event);
     void OnMotionNotify(const XMotionEvent& event);
     void OnKeyPress(const XKeyEvent& event);
-    void OnKeyRelease(const XKeyEvent& event);
 
     /**Xlib error handler*/
     static int OnXError(Display* display, XErrorEvent* e);

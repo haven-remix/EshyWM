@@ -19,11 +19,6 @@ EshyWMWindow::EshyWMWindow(Window _window) : window(_window)
 
 void EshyWMWindow::frame_window(bool b_was_created_before_window_manager)
 {
-    if(!EshyWM::get_current_config()->frame_window)
-    {
-        return;
-    }
-
     //Retrieve attributes of window to frame
     XWindowAttributes x_window_attributes = {0};
     CHECK(XGetWindowAttributes(EshyWM::get_window_manager()->get_display(), window, &x_window_attributes));
@@ -34,30 +29,22 @@ void EshyWMWindow::frame_window(bool b_was_created_before_window_manager)
         return;
     }
 
-    //const unsigned int border_width = EshyWM::get_current_config()->window_frame_border_width;
-    //const unsigned long border_color = EshyWM::get_current_config()->window_frame_border_color;
-    //const unsigned long background_color = EshyWM::get_current_config()->window_background_color;
+    static Display* display = EshyWM::get_window_manager()->get_display();
+    static const Window root = EshyWM::get_window_manager()->get_root();
 
-    const unsigned int window_bar_height = 20;
+    //Create frame and titlebar
+    frame = XCreateSimpleWindow(display, root, x_window_attributes.x, x_window_attributes.y, x_window_attributes.width, x_window_attributes.height + title_bar_height, border_width, border_color, background_color);
+    titlebar = XCreateSimpleWindow(display, root, x_window_attributes.x, x_window_attributes.y, x_window_attributes.width, title_bar_height, 0, border_color, 0xff0000);
+    XSelectInput(display, titlebar, SubstructureRedirectMask | SubstructureNotifyMask);
+    XReparentWindow(display, window, frame, 0, title_bar_height);
+    XReparentWindow(display, titlebar, frame, 0, 0);
+    XMapWindow(display, frame);
+    XMapWindow(display, titlebar);
 
-    const unsigned int border_width = 2;
-    const unsigned long border_color = 0x2b2a38;
-    const unsigned long background_color = 0x15141f;
+    XGrabButton(EshyWM::get_window_manager()->get_display(), Button1, 0, titlebar, false, ButtonPressMask | ButtonMotionMask, GrabModeSync, GrabModeAsync, None, None);
 
-    //Create frame
-    frame = XCreateSimpleWindow(EshyWM::get_window_manager()->get_display(), EshyWM::get_window_manager()->get_root(), x_window_attributes.x, x_window_attributes.y, x_window_attributes.width, x_window_attributes.height + window_bar_height, border_width, border_color, background_color);
-    XSelectInput(EshyWM::get_window_manager()->get_display(), frame, SubstructureRedirectMask | SubstructureNotifyMask);
-    XAddToSaveSet(EshyWM::get_window_manager()->get_display(), window);
-    XReparentWindow(EshyWM::get_window_manager()->get_display(), window, frame, 0, window_bar_height);
-    XMapWindow(EshyWM::get_window_manager()->get_display(), frame);
-
-    //Map events
-    //Raise windows with left button
-    XGrabButton(EshyWM::get_window_manager()->get_display(), Button1, 0, frame, false, ButtonPressMask, GrabModeAsync, GrabModeAsync, None, None);
-    //Move windows with alt + left button
-    XGrabButton(EshyWM::get_window_manager()->get_display(), Button1, 0, frame, false, ButtonPressMask | ButtonReleaseMask | ButtonMotionMask, GrabModeAsync, GrabModeAsync, None, None);
-    //Resize windows with alt + right button
-    XGrabButton(EshyWM::get_window_manager()->get_display(), Button3, 0, frame, false, ButtonPressMask | ButtonReleaseMask | ButtonMotionMask, GrabModeAsync, GrabModeAsync, None, None);
+    graphics_context_internal = XCreateGC(EshyWM::get_window_manager()->get_display(), frame, 0, 0);
+    draw_titlebar_buttons();
 }
 
 void EshyWMWindow::unframe_window()
@@ -107,6 +94,51 @@ void EshyWMWindow::setup_grab_events(bool b_was_created_before_window_manager)
     XGrabKey(EshyWM::get_window_manager()->get_display(), XKeysymToKeycode(EshyWM::get_window_manager()->get_display(), XK_Right), Mod1Mask, window, false, GrabModeAsync, GrabModeAsync);
     XGrabKey(EshyWM::get_window_manager()->get_display(), XKeysymToKeycode(EshyWM::get_window_manager()->get_display(), XK_Up), Mod1Mask, window, false, GrabModeAsync, GrabModeAsync);
     XGrabKey(EshyWM::get_window_manager()->get_display(), XKeysymToKeycode(EshyWM::get_window_manager()->get_display(), XK_Down), Mod1Mask, window, false, GrabModeAsync, GrabModeAsync);
+}
+
+
+void EshyWMWindow::draw_titlebar_buttons()
+{
+    //Retrieve attributes of window to frame
+    XWindowAttributes x_window_attributes = {0};
+    CHECK(XGetWindowAttributes(EshyWM::get_window_manager()->get_display(), window, &x_window_attributes));
+
+    XClearWindow(EshyWM::get_window_manager()->get_display(), titlebar);
+    XSetForeground(EshyWM::get_window_manager()->get_display(), graphics_context_internal, 0xffffff);
+    XFillRectangle(EshyWM::get_window_manager()->get_display(), titlebar, graphics_context_internal, x_window_attributes.width - title_bar_button_size, 0, title_bar_button_size, title_bar_button_size);
+    XFillRectangle(EshyWM::get_window_manager()->get_display(), titlebar, graphics_context_internal, (x_window_attributes.width - title_bar_button_size * 2) - title_bar_button_padding, 0, title_bar_button_size, title_bar_button_size);
+    XFillRectangle(EshyWM::get_window_manager()->get_display(), titlebar, graphics_context_internal, (x_window_attributes.width - title_bar_button_size * 3) - (title_bar_button_padding * 2), 0, title_bar_button_size, title_bar_button_size);
+}
+
+
+int EshyWMWindow::is_cursor_on_titlebar_buttons(Window window, int cursor_x, int cursor_y)
+{
+    if(window != titlebar)
+    {
+        return 0;
+    }
+
+    //Retrieve attributes of window to frame
+    XWindowAttributes x_window_attributes = {0};
+    CHECK(XGetWindowAttributes(EshyWM::get_window_manager()->get_display(), window, &x_window_attributes));
+
+    if(cursor_y > 0 && cursor_y < title_bar_height)
+    {
+        if(cursor_x < x_window_attributes.width && cursor_x > x_window_attributes.width - title_bar_button_size)
+        {
+            return 3;
+        }
+        else if(cursor_x < x_window_attributes.width - title_bar_button_size - title_bar_button_padding && cursor_x > x_window_attributes.width - (title_bar_button_size * 2) - title_bar_button_padding)
+        {
+            return 2;
+        }
+        else if(cursor_x < x_window_attributes.width - (title_bar_button_size * 2) - (title_bar_button_padding * 2) && cursor_x > x_window_attributes.width - (title_bar_button_size * 3) - (title_bar_button_padding * 2))
+        {
+            return 1;
+        }
+    }
+
+    return 0;
 }
 
 
@@ -196,6 +228,42 @@ void EshyWMWindow::resize_window_vertical_down_arrow()
     }
     
     XMoveResizeWindow(EshyWM::get_window_manager()->get_display(), window, window_size.x, window_size.y, window_size.width, window_size.height);
+}
+
+
+void EshyWMWindow::move_window()
+{
+
+}
+
+void EshyWMWindow::close_window()
+{
+    unframe_window();
+
+    Atom* supported_protocols;
+    int num_supported_protocols;
+
+    if (XGetWMProtocols(EshyWM::get_window_manager()->get_display(), window, &supported_protocols, &num_supported_protocols) && (std::find(supported_protocols, supported_protocols + num_supported_protocols, EshyWM::get_window_manager()->get_atom_wm_delete_window()) != supported_protocols + num_supported_protocols))
+    {
+        LOG(INFO) << "Gracefully deleting window " << window;
+
+        //Construct message
+        XEvent message;
+        memset(&message, 0, sizeof(message));
+        message.xclient.type = ClientMessage;
+        message.xclient.message_type = EshyWM::get_window_manager()->get_atom_wm_protocols();
+        message.xclient.window = window;
+        message.xclient.format = 32;
+        message.xclient.data.l[0] = EshyWM::get_window_manager()->get_atom_wm_delete_window();
+
+        //Send message to window to be closed
+        CHECK(XSendEvent(EshyWM::get_window_manager()->get_display(), window, false, 0 , &message));
+    }
+    else
+    {
+        LOG(INFO) << "Killing window " << window;
+        XKillClient(EshyWM::get_window_manager()->get_display(), window);
+    }
 }
 
 

@@ -56,7 +56,7 @@ std::string to_string(const XEvent& e) {
 		properties.emplace_back("window", to_string(e.xcreatewindow.window));
 		properties.emplace_back("parent", to_string(e.xcreatewindow.parent));
 		properties.emplace_back("size", size<int>(e.xcreatewindow.width, e.xcreatewindow.height).to_string());
-		properties.emplace_back("position", Position<int>(e.xcreatewindow.x, e.xcreatewindow.y).to_string());
+		properties.emplace_back("position", Vector2D<int>(e.xcreatewindow.x, e.xcreatewindow.y).to_string());
 		properties.emplace_back("border_width", to_string(e.xcreatewindow.border_width));
 		properties.emplace_back("override_redirect", to_string(static_cast<bool>(e.xcreatewindow.override_redirect)));
 		break;
@@ -76,14 +76,14 @@ std::string to_string(const XEvent& e) {
 	case ConfigureNotify:
 		properties.emplace_back("window", to_string(e.xconfigure.window));
 		properties.emplace_back("size", size<int>(e.xconfigure.width, e.xconfigure.height).to_string());
-		properties.emplace_back("position", Position<int>(e.xconfigure.x, e.xconfigure.y).to_string());
+		properties.emplace_back("position", Vector2D<int>(e.xconfigure.x, e.xconfigure.y).to_string());
 		properties.emplace_back("border_width", to_string(e.xconfigure.border_width));
 		properties.emplace_back("override_redirect", to_string(static_cast<bool>(e.xconfigure.override_redirect)));
 		break;
 	case ReparentNotify:
 		properties.emplace_back("window", to_string(e.xreparent.window));
 		properties.emplace_back("parent", to_string(e.xreparent.parent));
-		properties.emplace_back("position", Position<int>(e.xreparent.x, e.xreparent.y).to_string());
+		properties.emplace_back("position", Vector2D<int>(e.xreparent.x, e.xreparent.y).to_string());
 		properties.emplace_back("override_redirect", to_string(static_cast<bool>(e.xreparent.override_redirect)));
 		break;
 	case MapRequest:
@@ -93,7 +93,7 @@ std::string to_string(const XEvent& e) {
 		properties.emplace_back("window", to_string(e.xconfigurerequest.window));
 		properties.emplace_back("parent", to_string(e.xconfigurerequest.parent));
 		properties.emplace_back("value_mask", XConfigureWindowValueMaskToString(e.xconfigurerequest.value_mask));
-		properties.emplace_back("position", Position<int>(e.xconfigurerequest.x, e.xconfigurerequest.y).to_string());
+		properties.emplace_back("position", Vector2D<int>(e.xconfigurerequest.x, e.xconfigurerequest.y).to_string());
 		properties.emplace_back("size", size<int>(e.xconfigurerequest.width, e.xconfigurerequest.height).to_string());
 		properties.emplace_back("border_width", to_string(e.xconfigurerequest.border_width));
 		break;
@@ -101,11 +101,11 @@ std::string to_string(const XEvent& e) {
 	case ButtonRelease:
 		properties.emplace_back("window", to_string(e.xbutton.window));
 		properties.emplace_back("button", to_string(e.xbutton.button));
-		properties.emplace_back("position_root", Position<int>(e.xbutton.x_root, e.xbutton.y_root).to_string());
+		properties.emplace_back("position_root", Vector2D<int>(e.xbutton.x_root, e.xbutton.y_root).to_string());
 		break;
 	case MotionNotify:
 		properties.emplace_back("window", to_string(e.xmotion.window));
-		properties.emplace_back("position_root", Position<int>(e.xmotion.x_root, e.xmotion.y_root).to_string());
+		properties.emplace_back("position_root", Vector2D<int>(e.xmotion.x_root, e.xmotion.y_root).to_string());
 		properties.emplace_back("state", to_string(e.xmotion.state));
 		properties.emplace_back("time", to_string(e.xmotion.time));
 		break;

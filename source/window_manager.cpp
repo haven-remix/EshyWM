@@ -127,6 +127,18 @@ void WindowManager::Run()
         default:
             LOG(WARNING) << "Ignored event";
         }
+
+        //Draw all drawables after handling the event
+        draw();
+    }
+}
+
+void WindowManager::draw()
+{
+    //Draw title bar buttons
+    for(auto const& [key, value] : window_list)
+    {
+        value->draw_titlebar_buttons();
     }
 }
 
@@ -222,10 +234,10 @@ void WindowManager::OnMapRequest(const XMapRequestEvent& event)
 
 void WindowManager::OnButtonPress(const XButtonEvent& event)
 {
-    const Window frame = window_list[event.window] ? window_list[event.window]->get_frame() : event.window;
+    check_titlebar_button_pressed(event.window, event.x, event.y);
 
     //Save initial cursor position
-    drag_start_position = Position<int>(event.x_root, event.y_root);
+    drag_start_position = Vector2D<int>(event.x_root, event.y_root);
 
     //Save initial window info
     Window returned_root;
@@ -236,27 +248,43 @@ void WindowManager::OnButtonPress(const XButtonEvent& event)
     unsigned border_width;
     unsigned depth;
 
-    CHECK(XGetGeometry(display, frame, &returned_root, &x, &y, &width, &height, &border_width, &depth));
-    drag_start_frame_position = Position<int>(x, y);
+    XGetGeometry(display, event.window, &returned_root, &x, &y, &width, &height, &border_width, &depth);
+    drag_start_frame_position = Vector2D<int>(x, y);
     drag_start_frame_size = size<int>(width, height);
 
-    //Raise clicked window to top and set focus
-    XRaiseWindow(display, frame);
-    XSetInputFocus(display, frame, RevertToPointerRoot, event.time);
+    if(window_titlebar_list.count(event.window))
+    {
+        std::cout << "titlebar" << std::endl;
+        XRaiseWindow(display, window_titlebar_list[event.window]->get_window());
+        XSetInputFocus(display, window_titlebar_list[event.window]->get_window(), RevertToPointerRoot, event.time);
+    }
+    else
+    {
+        std::cout << "other" << std::endl;
+        XRaiseWindow(display, event.window);
+        XSetInputFocus(display, event.window, RevertToPointerRoot, event.time);
+    }
+
+    // //Raise clicked window to top and set focus
+    // XRaiseWindow(display, event.window);
+    // XSetInputFocus(display, window_list.count(event.window) ? window_list[event.window]->get_window() : event.window, RevertToPointerRoot, event.time);
     //Pass the click event through
     XAllowEvents(display, ReplayPointer, event.time);
 }
 
 void WindowManager::OnMotionNotify(const XMotionEvent& event)
 {
-    CHECK(window_list.count(event.window));
-    const Window window = window_list[event.window] ? window_list[event.window]->get_frame() : event.window;
-    const Position<int> drag_position(event.x_root, event.y_root);
+    const Window window = window_list.count(event.window) ? window_list[event.window]->get_frame() : event.window;
+    const Vector2D<int> drag_position(event.x_root, event.y_root);
     const Vector2D<int> delta = drag_position - drag_start_position;
+
+    //If frame, then work without ModMask
+
+    std::cout << event.window << std::endl;
 
     if(event.state & Button1Mask)
     {
-        const Position<int> dest_frame_position = drag_start_frame_position + delta;
+        const Vector2D<int> dest_frame_position = drag_start_frame_position + delta;
         XMoveWindow(display, window, dest_frame_position.x, dest_frame_position.y);
     }
     else if(event.state & Button3Mask)
@@ -276,30 +304,7 @@ void WindowManager::OnKeyPress(const XKeyEvent& event)
 {
     if ((event.state & Mod1Mask) && (event.keycode == XKeysymToKeycode(display, XK_C)))
     {
-        Atom* supported_protocols;
-        int num_supported_protocols;
-
-        if (XGetWMProtocols(display, event.window, &supported_protocols, &num_supported_protocols) && (std::find(supported_protocols, supported_protocols + num_supported_protocols, WM_DELETE_WINDOW) != supported_protocols + num_supported_protocols))
-        {
-            LOG(INFO) << "Gracefully deleting window " << event.window;
-
-            //Construct message
-            XEvent message;
-            memset(&message, 0, sizeof(message));
-            message.xclient.type = ClientMessage;
-            message.xclient.message_type = WM_PROTOCOLS;
-            message.xclient.window = event.window;
-            message.xclient.format = 32;
-            message.xclient.data.l[0] = WM_DELETE_WINDOW;
-
-            //Send message to window to be closed
-            CHECK(XSendEvent(display, event.window, false, 0 , &message));
-        }
-        else
-        {
-            LOG(INFO) << "Killing window " << event.window;
-            XKillClient(display, event.window);
-        }
+        close_window(event.window);
     }
     else if ((event.state & Mod1Mask) && (event.keycode == XKeysymToKeycode(display, XK_Tab)))
     {
@@ -348,10 +353,14 @@ EshyWMWindow* WindowManager::register_window(Window window, bool b_was_created_b
         return nullptr;
     }
 
+    //Add so we can restore if we crash
+    XAddToSaveSet(get_display(), window);
+
     EshyWMWindow* new_window = new EshyWMWindow(window);
     new_window->frame_window(b_was_created_before_window_manager);
     new_window->setup_grab_events(b_was_created_before_window_manager);
-    window_list.emplace(window, new_window);
+    window_list.emplace(new_window->get_frame(), new_window);
+    window_titlebar_list.emplace(new_window->get_titlebar(), new_window);
 
     return new_window;
 }
@@ -362,6 +371,15 @@ void WindowManager::unregister_window(Window window)
     if(window_list.count(window))
     {
         num_horizontal_slots--;
+        window_list.erase(window);
+    }
+}
+
+void WindowManager::close_window(Window window)
+{
+    if(window_list.count(window))
+    {
+        window_list[window]->close_window();
         window_list.erase(window);
     }
 }
@@ -391,5 +409,27 @@ void WindowManager::initialize_window(Window window, bool b_was_created_before_w
             //num_vertical_slots++;
         }
         else data->set_floating(true);
+    }
+}
+
+void WindowManager::check_titlebar_button_pressed(Window window, int cursor_x, int cursor_y)
+{
+    //This will check if the window is a frame (so we can't check the same area, but for a client window)
+    if(window_list.count(window))
+    {
+        const int button_pressed = window_list[window]->is_cursor_on_titlebar_buttons(window, cursor_x, cursor_y);
+
+        if(button_pressed == 1)
+        {
+            
+        }
+        else if(button_pressed == 2)
+        {
+            
+        }
+        else if(button_pressed == 3)
+        {
+            close_window(window);
+        }
     }
 }

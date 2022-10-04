@@ -49,20 +49,6 @@ struct window_size_data {
 template <typename T>
 std::ostream& operator << (std::ostream& out, const size<T>& size);
 
-
-// Represents a 2D position.
-template <typename T>
-struct Position {
-	T x, y;
-
-	Position() = default;
-	Position(T _x, T _y)
-		: x(_x), y(_y) {
-	}
-
-	std::string to_string() const;
-};
-
 // Represents a 2D vector.
 template <typename T>
 struct Vector2D {
@@ -78,17 +64,13 @@ struct Vector2D {
 
 // Outputs a size<T> as a string to a std::ostream.
 template <typename T>
-std::ostream& operator << (std::ostream& out, const Position<T>& pos);
+std::ostream& operator << (std::ostream& out, const Vector2D<T>& pos);
 
 // Position operators.
 template <typename T>
-Vector2D<T> operator - (const Position<T>& a, const Position<T>& b);
+Vector2D<T> operator - (const Vector2D<T>& a, const Vector2D<T>& b);
 template <typename T>
-Position<T> operator + (const Position<T>& a, const Vector2D<T> &v);
-template <typename T>
-Position<T> operator + (const Vector2D<T> &v, const Position<T>& a);
-template <typename T>
-Position<T> operator - (const Position<T>& a, const Vector2D<T> &v);
+Vector2D<T> operator + (const Vector2D<T>& a, const Vector2D<T> &v);
 
 // size operators.
 template <typename T>
@@ -142,29 +124,8 @@ std::string size<T>::to_string() const
 	return out.str();
 }
 
-// std::string window_data::to_string() const
-// {
-// 	std::ostringstream out;
-// 	out << "position: " << x << ", " << y << " size: " << width << "x" << height;
-// 	return out.str();
-// }
-
 template <typename T>
 std::ostream& operator << (std::ostream& out, const size<T>& size)
-{
-  	return out << size.to_string();
-}
-
-template <typename T>
-std::string Position<T>::to_string() const
-{
-	std::ostringstream out;
-	out << "(" << x << ", " << y << ")";
-	return out.str();
-}
-
-template <typename T>
-std::ostream& operator << (std::ostream& out, const Position<T>& size)
 {
   	return out << size.to_string();
 }
@@ -184,27 +145,15 @@ std::ostream& operator << (std::ostream& out, const Vector2D<T>& size)
 }
 
 template <typename T>
-Vector2D<T> operator - (const Position<T>& a, const Position<T>& b)
+Vector2D<T> operator - (const Vector2D<T>& a, const Vector2D<T>& b)
 {
   	return Vector2D<T>(a.x - b.x, a.y - b.y);
 }
 
 template <typename T>
-Position<T> operator + (const Position<T>& a, const Vector2D<T> &v)
+Vector2D<T> operator + (const Vector2D<T>& a, const Vector2D<T> &v)
 {
-  	return Position<T>(a.x + v.x, a.y + v.y);
-}
-
-template <typename T>
-Position<T> operator + (const Vector2D<T> &v, const Position<T>& a)
-{
-  	return Position<T>(a.x + v.x, a.y + v.y);
-}
-
-template <typename T>
-Position<T> operator - (const Position<T>& a, const Vector2D<T> &v)
-{
-  	return Position<T>(a.x - v.x, a.y - v.y);
+  	return Vector2D<T>(a.x + v.x, a.y + v.y);
 }
 
 template <typename T>

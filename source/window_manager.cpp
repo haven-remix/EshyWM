@@ -234,70 +234,43 @@ void WindowManager::OnMapRequest(const XMapRequestEvent& event)
 
 void WindowManager::OnButtonPress(const XButtonEvent& event)
 {
-    check_titlebar_button_pressed(event.window, event.x, event.y);
-
     //Save initial cursor position
     drag_start_position = Vector2D<int>(event.x_root, event.y_root);
 
-    //Save initial window info
-    Window returned_root;
-    int x;
-    int y;
-    unsigned width;
-    unsigned height;
-    unsigned border_width;
-    unsigned depth;
+    EshyWMWindow* window = window_titlebar_list.count(event.window) ? window_titlebar_list[event.window] : window_list[event.window];
+    window->recalculate_all_window_size_and_location();
 
-    XGetGeometry(display, event.window, &returned_root, &x, &y, &width, &height, &border_width, &depth);
-    drag_start_frame_position = Vector2D<int>(x, y);
-    drag_start_frame_size = size<int>(width, height);
+    check_titlebar_button_pressed(event.window, event.x, event.y);
 
-    if(window_titlebar_list.count(event.window))
-    {
-        std::cout << "titlebar" << std::endl;
-        XRaiseWindow(display, window_titlebar_list[event.window]->get_window());
-        XSetInputFocus(display, window_titlebar_list[event.window]->get_window(), RevertToPointerRoot, event.time);
-    }
-    else
-    {
-        std::cout << "other" << std::endl;
-        XRaiseWindow(display, event.window);
-        XSetInputFocus(display, event.window, RevertToPointerRoot, event.time);
-    }
-
-    // //Raise clicked window to top and set focus
-    // XRaiseWindow(display, event.window);
-    // XSetInputFocus(display, window_list.count(event.window) ? window_list[event.window]->get_window() : event.window, RevertToPointerRoot, event.time);
+    XRaiseWindow(display, event.window);
+    XSetInputFocus(display, event.window, RevertToPointerRoot, event.time);
     //Pass the click event through
     XAllowEvents(display, ReplayPointer, event.time);
 }
 
 void WindowManager::OnMotionNotify(const XMotionEvent& event)
 {
-    const Window window = window_list.count(event.window) ? window_list[event.window]->get_frame() : event.window;
-    const Vector2D<int> drag_position(event.x_root, event.y_root);
-    const Vector2D<int> delta = drag_position - drag_start_position;
+    const Vector2D<int> delta = Vector2D<int>(event.x_root, event.y_root) - drag_start_position;
 
-    //If frame, then work without ModMask
-
-    std::cout << event.window << std::endl;
-
-    if(event.state & Button1Mask)
+    if(window_titlebar_list.count(event.window) && (event.state & Button1Mask))
     {
-        const Vector2D<int> dest_frame_position = drag_start_frame_position + delta;
-        XMoveWindow(display, window, dest_frame_position.x, dest_frame_position.y);
+        const window_size_location_data data = window_titlebar_list[event.window]->get_frame_size_and_location_data();
+        const Vector2D<int> dest_frame_position = Vector2D<int>(data.x, data.y) + delta;
+        XMoveWindow(display, window_titlebar_list[event.window]->get_frame(), dest_frame_position.x, dest_frame_position.y);
     }
-    else if(event.state & Button3Mask)
+    else
     {
-        const Vector2D<int> size_delta(std::max(delta.x, -drag_start_frame_size.width), std::max(delta.y, -drag_start_frame_size.height));
-        const size<int> dest_frame_size = drag_start_frame_size + size_delta;
-
-        //Resize frame
-        XResizeWindow(display, window, dest_frame_size.width, dest_frame_size.height);
-
-        //Resize client window
-        XResizeWindow(display, event.window, dest_frame_size.width, dest_frame_size.height);
-    }
+        if(event.state & Button1Mask)
+        {
+            const window_size_location_data data = window_list[event.window]->get_frame_size_and_location_data();
+            const Vector2D<int> dest_frame_position = Vector2D<int>(data.x, data.y) + delta;
+            XMoveWindow(display, event.window, dest_frame_position.x, dest_frame_position.y);
+        }
+        else if(event.state & Button3Mask)
+        {
+            window_list[event.window]->resize_window(delta);
+        }
+    }    
 }
 
 void WindowManager::OnKeyPress(const XKeyEvent& event)

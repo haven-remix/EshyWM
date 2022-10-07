@@ -34,14 +34,12 @@ void EshyWMWindow::frame_window(bool b_was_created_before_window_manager)
 
     //Create frame and titlebar
     frame = XCreateSimpleWindow(display, root, x_window_attributes.x, x_window_attributes.y, x_window_attributes.width, x_window_attributes.height + title_bar_height, border_width, border_color, background_color);
-    titlebar = XCreateSimpleWindow(display, root, x_window_attributes.x, x_window_attributes.y, x_window_attributes.width, title_bar_height, 0, border_color, 0xff0000);
+    titlebar = XCreateSimpleWindow(display, root, x_window_attributes.x, x_window_attributes.y, x_window_attributes.width, title_bar_height, 0, border_color, background_color);
     XSelectInput(display, titlebar, SubstructureRedirectMask | SubstructureNotifyMask);
     XReparentWindow(display, window, frame, 0, title_bar_height);
     XReparentWindow(display, titlebar, frame, 0, 0);
     XMapWindow(display, frame);
     XMapWindow(display, titlebar);
-
-    XGrabButton(EshyWM::get_window_manager()->get_display(), Button1, 0, titlebar, false, ButtonPressMask | ButtonMotionMask, GrabModeSync, GrabModeAsync, None, None);
 
     graphics_context_internal = XCreateGC(EshyWM::get_window_manager()->get_display(), frame, 0, 0);
     draw_titlebar_buttons();
@@ -60,8 +58,6 @@ void EshyWMWindow::unframe_window()
         XRemoveFromSaveSet(EshyWM::get_window_manager()->get_display(), window);
         //Destroy frame
         XDestroyWindow(EshyWM::get_window_manager()->get_display(), frame);
-
-        LOG(INFO) << "Unframed window " << window << " [" << frame << "]";
     }
 }
 
@@ -77,13 +73,12 @@ void EshyWMWindow::setup_grab_events(bool b_was_created_before_window_manager)
         return;
     }
 
-    //Grab events for window management actions on client window
-    //Raise windows with left button
-    XGrabButton(EshyWM::get_window_manager()->get_display(), Button1, 0, window, false, ButtonPressMask, GrabModeSync, GrabModeAsync, None, None);
-    //Move windows with alt + left button
-    XGrabButton(EshyWM::get_window_manager()->get_display(), Button1, Mod1Mask, window, false, ButtonPressMask | ButtonReleaseMask | ButtonMotionMask, GrabModeAsync, GrabModeAsync, None, None);
-    //Resize windows with alt + right button
-    XGrabButton(EshyWM::get_window_manager()->get_display(), Button3, Mod1Mask, window, false, ButtonPressMask | ButtonReleaseMask | ButtonMotionMask, GrabModeAsync, GrabModeAsync, None, None);
+    //Basic movement and resizing
+    XGrabButton(EshyWM::get_window_manager()->get_display(), Button1, 0, frame, false, ButtonPressMask, GrabModeSync, GrabModeAsync, None, None);
+    XGrabButton(EshyWM::get_window_manager()->get_display(), Button1, Mod1Mask, frame, false, ButtonPressMask | ButtonMotionMask, GrabModeAsync, GrabModeAsync, None, None);
+    XGrabButton(EshyWM::get_window_manager()->get_display(), Button3, Mod1Mask, frame, false, ButtonPressMask | ButtonMotionMask, GrabModeAsync, GrabModeAsync, None, None);
+    XGrabButton(EshyWM::get_window_manager()->get_display(), Button1, 0, titlebar, false, ButtonPressMask | ButtonMotionMask, GrabModeAsync, GrabModeAsync, None, None);
+
     //Kill windows with alt + shift + c
     XGrabKey(EshyWM::get_window_manager()->get_display(), XKeysymToKeycode(EshyWM::get_window_manager()->get_display(), XK_C), Mod1Mask, window, false, GrabModeAsync, GrabModeAsync);
     //Switch windows with alt + tab
@@ -101,7 +96,7 @@ void EshyWMWindow::draw_titlebar_buttons()
 {
     //Retrieve attributes of window to frame
     XWindowAttributes x_window_attributes = {0};
-    CHECK(XGetWindowAttributes(EshyWM::get_window_manager()->get_display(), window, &x_window_attributes));
+    XGetWindowAttributes(EshyWM::get_window_manager()->get_display(), window, &x_window_attributes);
 
     XClearWindow(EshyWM::get_window_manager()->get_display(), titlebar);
     XSetForeground(EshyWM::get_window_manager()->get_display(), graphics_context_internal, 0xffffff);
@@ -144,96 +139,102 @@ int EshyWMWindow::is_cursor_on_titlebar_buttons(Window window, int cursor_x, int
 
 void EshyWMWindow::resize_window_horizontal_left_arrow()
 {
-    window_size_data window_size = get_window_size();
+    // window_size_data window_size = get_window_size();
 
-    if(position_data->get_horizontal_slot() == 0)
-    {
-        window_size.width -= get_resize_step_horizontal();
-    }
-    else if (position_data->get_horizontal_slot() != 0 && position_data->get_horizontal_slot() != EshyWM::get_window_manager()->get_num_horizontal_slots() - 1)
-    {
-        window_size.width -= get_resize_step_horizontal() * 2;
-        window_size.x += get_resize_step_horizontal();
-    }
-    else if(position_data->get_horizontal_slot() == EshyWM::get_window_manager()->get_num_horizontal_slots() - 1)
-    {
-        window_size.width += get_resize_step_horizontal();
-        window_size.x -= get_resize_step_horizontal();
-    }
+    // if(position_data->get_horizontal_slot() == 0)
+    // {
+    //     window_size.width -= get_resize_step_horizontal();
+    // }
+    // else if (position_data->get_horizontal_slot() != 0 && position_data->get_horizontal_slot() != EshyWM::get_window_manager()->get_num_horizontal_slots() - 1)
+    // {
+    //     window_size.width -= get_resize_step_horizontal() * 2;
+    //     window_size.x += get_resize_step_horizontal();
+    // }
+    // else if(position_data->get_horizontal_slot() == EshyWM::get_window_manager()->get_num_horizontal_slots() - 1)
+    // {
+    //     window_size.width += get_resize_step_horizontal();
+    //     window_size.x -= get_resize_step_horizontal();
+    // }
 
-    XMoveResizeWindow(EshyWM::get_window_manager()->get_display(), window, window_size.x, window_size.y, window_size.width, window_size.height);
+    // XMoveResizeWindow(EshyWM::get_window_manager()->get_display(), window, window_size.x, window_size.y, window_size.width, window_size.height);
 }
 
 void EshyWMWindow::resize_window_horizontal_right_arrow()
 {
-    window_size_data window_size = get_window_size();
+    // window_size_data window_size = get_window_size();
 
-    if(position_data->get_horizontal_slot() == 0)
-    {
-        window_size.width += get_resize_step_horizontal();
-    }
-    else if (position_data->get_horizontal_slot() != 0 && position_data->get_horizontal_slot() != EshyWM::get_window_manager()->get_num_horizontal_slots() - 1)
-    {
-        window_size.width += get_resize_step_horizontal() * 2;
-        window_size.x -= get_resize_step_horizontal();
-    }
-    else if(position_data->get_horizontal_slot() == EshyWM::get_window_manager()->get_num_horizontal_slots() - 1)
-    {
-        window_size.width -= get_resize_step_horizontal();
-        window_size.x += get_resize_step_horizontal();
-    }
+    // if(position_data->get_horizontal_slot() == 0)
+    // {
+    //     window_size.width += get_resize_step_horizontal();
+    // }
+    // else if (position_data->get_horizontal_slot() != 0 && position_data->get_horizontal_slot() != EshyWM::get_window_manager()->get_num_horizontal_slots() - 1)
+    // {
+    //     window_size.width += get_resize_step_horizontal() * 2;
+    //     window_size.x -= get_resize_step_horizontal();
+    // }
+    // else if(position_data->get_horizontal_slot() == EshyWM::get_window_manager()->get_num_horizontal_slots() - 1)
+    // {
+    //     window_size.width -= get_resize_step_horizontal();
+    //     window_size.x += get_resize_step_horizontal();
+    // }
 
-    XMoveResizeWindow(EshyWM::get_window_manager()->get_display(), window, window_size.x, window_size.y, window_size.width, window_size.height);
+    // XMoveResizeWindow(EshyWM::get_window_manager()->get_display(), window, window_size.x, window_size.y, window_size.width, window_size.height);
 }
 
 void EshyWMWindow::resize_window_vertical_up_arrow()
 {
-    window_size_data window_size = get_window_size();
+    // window_size_data window_size = get_window_size();
 
-    if(position_data->get_vertical_slot() == 0)
-    {
-        window_size.height -= get_resize_step_vertical();
-    }
-    else if (position_data->get_vertical_slot() != 0 && position_data->get_vertical_slot() != EshyWM::get_window_manager()->get_num_vertical_slots() - 1)
-    {
-        window_size.height += get_resize_step_vertical() * 2;
-        window_size.y -= get_resize_step_vertical();
-    }
-    else if(position_data->get_vertical_slot() == EshyWM::get_window_manager()->get_num_vertical_slots() - 1)
-    {
-        window_size.height += get_resize_step_vertical();
-        window_size.y -= get_resize_step_vertical();
-    }
+    // if(position_data->get_vertical_slot() == 0)
+    // {
+    //     window_size.height -= get_resize_step_vertical();
+    // }
+    // else if (position_data->get_vertical_slot() != 0 && position_data->get_vertical_slot() != EshyWM::get_window_manager()->get_num_vertical_slots() - 1)
+    // {
+    //     window_size.height += get_resize_step_vertical() * 2;
+    //     window_size.y -= get_resize_step_vertical();
+    // }
+    // else if(position_data->get_vertical_slot() == EshyWM::get_window_manager()->get_num_vertical_slots() - 1)
+    // {
+    //     window_size.height += get_resize_step_vertical();
+    //     window_size.y -= get_resize_step_vertical();
+    // }
 
-    XMoveResizeWindow(EshyWM::get_window_manager()->get_display(), window, window_size.x, window_size.y, window_size.width, window_size.height);
+    // XMoveResizeWindow(EshyWM::get_window_manager()->get_display(), window, window_size.x, window_size.y, window_size.width, window_size.height);
 }
 
 void EshyWMWindow::resize_window_vertical_down_arrow()
 {
-    window_size_data window_size = get_window_size();
+    // window_size_data window_size = get_window_size();
 
-    if(position_data->get_vertical_slot() == 0)
-    {
-        window_size.height += get_resize_step_vertical();
-    }
-    else if (position_data->get_vertical_slot() != 0 && position_data->get_vertical_slot() != EshyWM::get_window_manager()->get_num_vertical_slots() - 1)
-    {
-        window_size.height -= get_resize_step_vertical() * 2;
-        window_size.y += get_resize_step_vertical();
-    }
-    else if(position_data->get_vertical_slot() == EshyWM::get_window_manager()->get_num_vertical_slots() - 1)
-    {
-        window_size.height -= get_resize_step_vertical();
-        window_size.y += get_resize_step_vertical();
-    }
+    // if(position_data->get_vertical_slot() == 0)
+    // {
+    //     window_size.height += get_resize_step_vertical();
+    // }
+    // else if (position_data->get_vertical_slot() != 0 && position_data->get_vertical_slot() != EshyWM::get_window_manager()->get_num_vertical_slots() - 1)
+    // {
+    //     window_size.height -= get_resize_step_vertical() * 2;
+    //     window_size.y += get_resize_step_vertical();
+    // }
+    // else if(position_data->get_vertical_slot() == EshyWM::get_window_manager()->get_num_vertical_slots() - 1)
+    // {
+    //     window_size.height -= get_resize_step_vertical();
+    //     window_size.y += get_resize_step_vertical();
+    // }
     
-    XMoveResizeWindow(EshyWM::get_window_manager()->get_display(), window, window_size.x, window_size.y, window_size.width, window_size.height);
+    // XMoveResizeWindow(EshyWM::get_window_manager()->get_display(), window, window_size.x, window_size.y, window_size.width, window_size.height);
 }
 
 
-void EshyWMWindow::move_window()
+void EshyWMWindow::resize_window(Vector2D<int> cursor_move_delta)
 {
+    const window_size_location_data data = get_frame_size_and_location_data();
+    const Vector2D<int> size_delta(std::max(cursor_move_delta.x, -(int)data.width), std::max(cursor_move_delta.y, -(int)data.height));
+    const size<int> final_frame_size = size<int>(data.width, data.height) + size_delta;
 
+    XResizeWindow(EshyWM::get_window_manager()->get_display(), frame, final_frame_size.width, final_frame_size.height);
+    XResizeWindow(EshyWM::get_window_manager()->get_display(), titlebar, final_frame_size.width, title_bar_height);
+    XResizeWindow(EshyWM::get_window_manager()->get_display(), window, final_frame_size.width, final_frame_size.height - title_bar_height);
 }
 
 void EshyWMWindow::close_window()
@@ -267,7 +268,7 @@ void EshyWMWindow::close_window()
 }
 
 
-window_size_data EshyWMWindow::get_window_size()
+void EshyWMWindow::recalculate_all_window_size_and_location()
 {
     Window return_window;
     int x;
@@ -276,16 +277,20 @@ window_size_data EshyWMWindow::get_window_size()
     unsigned int width;
     unsigned int height;
 
+    XGetGeometry(EshyWM::get_window_manager()->get_display(), frame, &return_window, &x, &y, &width, &height, &unsigned_null, &unsigned_null);
+    frame_size_and_location_data = window_size_location_data(x, y, width, height);
+    XGetGeometry(EshyWM::get_window_manager()->get_display(), titlebar, &return_window, &x, &y, &width, &height, &unsigned_null, &unsigned_null);
+    titlebar_size_and_location_data = window_size_location_data(x, y, width, height);
     XGetGeometry(EshyWM::get_window_manager()->get_display(), window, &return_window, &x, &y, &width, &height, &unsigned_null, &unsigned_null);
-    return window_size_data(x, y, width, height);
+    window_size_and_location_data = window_size_location_data(x, y, width, height);
 }
 
-int EshyWMWindow::get_resize_step_horizontal()
+int EshyWMWindow::get_resize_step_horizontal() const
 {
     return EshyWM::get_current_config()->resize_step_size_width;
 }
 
-int EshyWMWindow::get_resize_step_vertical()
+int EshyWMWindow::get_resize_step_vertical() const
 {
     return EshyWM::get_current_config()->resize_step_size_height;
 }

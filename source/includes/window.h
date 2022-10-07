@@ -31,11 +31,13 @@ public:
     void resize_window_vertical_up_arrow();
     void resize_window_vertical_down_arrow();
 
-    void move_window();
+    void resize_window(Vector2D<int> cursor_move_delta);
 
     void draw_titlebar_buttons();
 
     void close_window();
+
+    void recalculate_all_window_size_and_location();
 
     /**@return 0 = none; 1 = minimize; 2 = maximize; 3 = close*/
     int is_cursor_on_titlebar_buttons(Window window, int cursor_x, int cursor_y);
@@ -45,6 +47,9 @@ public:
     Window get_frame() {return frame;}
     Window get_titlebar() {return titlebar;}
     window_position_data* get_widnow_position_data() {return position_data;}
+    window_size_location_data get_frame_size_and_location_data() const {return frame_size_and_location_data;}
+    window_size_location_data get_titlebar_size_and_location_data() const {return titlebar_size_and_location_data;}
+    window_size_location_data get_window_size_and_location_data() const {return window_size_and_location_data;}
 
     /**Setters*/
     void set_window_position_data(window_position_data* new_window_position_data) {position_data = new_window_position_data;}
@@ -56,13 +61,14 @@ private:
     Window titlebar;
 
     window_position_data* position_data;
+    window_size_location_data frame_size_and_location_data;
+    window_size_location_data titlebar_size_and_location_data;
+    window_size_location_data window_size_and_location_data;
 
     GC graphics_context_internal;
 
-    window_size_data get_window_size();
-
-    int get_resize_step_horizontal();
-    int get_resize_step_vertical();
+    int get_resize_step_horizontal() const;
+    int get_resize_step_vertical() const;
 
     /**Config*/
     const unsigned int title_bar_height = 20;

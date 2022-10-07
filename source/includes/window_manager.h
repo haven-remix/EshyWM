@@ -58,16 +58,12 @@ private:
 
     /**Cursor position at the start of a window move/resize*/
     Vector2D<int> drag_start_position;
-    /**The position of the affected window at the start of a window*/
-    Vector2D<int> drag_start_frame_position;
-    /**The size of the affected window at the start of a window move/resize*/
-    size<int> drag_start_frame_size;
 
     /**Atom constants*/
     const Atom WM_PROTOCOLS;
     const Atom WM_DELETE_WINDOW;
 
-    /**A list of windows, this will only contain the frames of the displayed window*/
+    /**A list of windows, sorted by titlebar, frame, and window*/
     window_map window_list;
     window_map window_titlebar_list;
 

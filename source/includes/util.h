@@ -7,6 +7,19 @@ extern "C" {
 #include <ostream>
 #include <string>
 
+// Represents a 2D vector.
+template <typename T>
+struct Vector2D {
+	T x, y;
+
+	Vector2D() = default;
+	Vector2D(T _x, T _y)
+		: x(_x), y(_y) {
+	}
+
+	std::string to_string() const;
+};
+
 template <typename T>
 struct size {
     T width;
@@ -47,38 +60,58 @@ struct window_size_location_data {
 template <typename T>
 std::ostream& operator << (std::ostream& out, const size<T>& size);
 
-// Represents a 2D vector.
-template <typename T>
-struct Vector2D {
-	T x, y;
-
-	Vector2D() = default;
-	Vector2D(T _x, T _y)
-		: x(_x), y(_y) {
-	}
-
-	std::string to_string() const;
-};
-
 // Outputs a size<T> as a string to a std::ostream.
 template <typename T>
 std::ostream& operator << (std::ostream& out, const Vector2D<T>& pos);
 
-// Position operators.
+//Vector operators
 template <typename T>
 Vector2D<T> operator - (const Vector2D<T>& a, const Vector2D<T>& b);
 template <typename T>
 Vector2D<T> operator + (const Vector2D<T>& a, const Vector2D<T> &v);
+template <typename T>
+size<T> operator - (const Vector2D<T>& a, const Vector2D<T>& b);
+template <typename T>
+size<T> operator + (const Vector2D<T>& a, const Vector2D<T> &v);
+template <typename T>
+void operator -= (const Vector2D<T>& a, const Vector2D<T>& b);
+template <typename T>
+void operator += (const Vector2D<T>& a, const Vector2D<T> &v);
 
-// size operators.
+//size operators
+template <typename T>
+size<T> operator - (const size<T>& a, const size<T>& b);
+template <typename T>
+size<T> operator + (const size<T>& a, const size<T> &v);
 template <typename T>
 Vector2D<T> operator - (const size<T>& a, const size<T>& b);
 template <typename T>
-size<T> operator + (const size<T>& a, const Vector2D<T> &v);
+Vector2D<T> operator + (const size<T>& a, const size<T> &v);
 template <typename T>
-size<T> operator + (const Vector2D<T> &v, const size<T>& a);
+void operator - (const size<T>& a, const size<T>& b);
 template <typename T>
-size<T> operator - (const size<T>& a, const Vector2D<T> &v);
+void operator + (const size<T>& a, const size<T> &b);
+
+//Vector size mix operators
+template <typename T>
+Vector2D<T> operator - (const Vector2D<T>& a, const size<T>& b);
+template <typename T>
+Vector2D<T> operator + (const Vector2D<T>& a, const size<T>& b);
+template <typename T>
+Vector2D<T> operator - (const size<T>& a, const Vector2D<T> &v);
+template <typename T>
+size<T> operator + (const Vector2D<T>& a, const size<T> &v);
+template <typename T>
+size<T> operator + (const size<T> &v, const Vector2D<T>& a);
+template <typename T>
+void operator -= (const Vector2D<T>& a, const size<T>& b);
+template <typename T>
+void operator -= (const size<T>& a, const Vector2D<T> &b);
+template <typename T>
+void operator += (const Vector2D<T>& a, const size<T> &b);
+template <typename T>
+void operator += (const size<T> &a, const Vector2D<T>& b);
+
 
 // Joins a container of elements into a single string, with elements separated
 // by a delimiter. Any element can be used as long as an operator << on ostream
@@ -142,6 +175,7 @@ std::ostream& operator << (std::ostream& out, const Vector2D<T>& size)
   	return out << size.to_string();
 }
 
+//Vector operators
 template <typename T>
 Vector2D<T> operator - (const Vector2D<T>& a, const Vector2D<T>& b)
 {
@@ -155,28 +189,125 @@ Vector2D<T> operator + (const Vector2D<T>& a, const Vector2D<T> &v)
 }
 
 template <typename T>
+size<T> operator - (const Vector2D<T>& a, const Vector2D<T>& b)
+{
+  	return size<T>(a.x - b.x, a.y - b.y);
+}
+
+template <typename T>
+size<T> operator + (const Vector2D<T>& a, const Vector2D<T> &v)
+{
+  	return size<T>(a.x + v.x, a.y + v.y);
+}
+
+template <typename T>
+void operator -= (const Vector2D<T>& a, const Vector2D<T>& b)
+{
+	a.x -= b.x;
+	a.y -= b.y;
+}
+
+template <typename T>
+void operator += (const Vector2D<T>& a, const Vector2D<T> &b)
+{
+	a.x += b.x;
+	a.y += b.y;
+}
+
+//size operators
+template <typename T>
+size<T> operator - (const size<T>& a, const size<T>& b)
+{
+  	return size<T>(a.width - b.width, a.height - b.height);
+}
+
+template <typename T>
+size<T> operator + (const size<T>& a, const size<T> &b)
+{
+  	return size<T>(a.width + b.width, a.height + b.height);
+}
+
+template <typename T>
 Vector2D<T> operator - (const size<T>& a, const size<T>& b)
 {
   	return Vector2D<T>(a.width - b.width, a.height - b.height);
 }
 
 template <typename T>
-size<T> operator + (const size<T>& a, const Vector2D<T> &v)
+Vector2D<T> operator + (const size<T>& a, const size<T> &b)
+{
+  	return Vector2D<T>(a.width + b.width, a.height + b.height);
+}
+
+template <typename T>
+void operator - (const size<T>& a, const size<T>& b)
+{
+	a.width -= b.width;
+	a.height -= b.height;
+}
+
+template <typename T>
+void operator + (const size<T>& a, const size<T> &b)
+{
+	a.width += b.width;
+	a.height += b.height;
+}
+
+//Vector and size mix operators
+template <typename T>
+Vector2D<T> operator - (const Vector2D<T>& a, const size<T>& b)
+{
+  	return Vector2D<T>(a.x - b.width, a.y - b.height);
+}
+
+template <typename T>
+Vector2D<T> operator + (const Vector2D<T>& a, const size<T>& b)
+{
+	return Vector2D<T>(a.x + b.width, a.y + b.height);
+}
+
+template <typename T>
+Vector2D<T> operator - (const size<T>& a, const Vector2D<T> &v)
+{
+  	return Vector2D<T>(a.width - v.x, a.height - v.y);
+}
+
+template <typename T>
+size<T> operator + (const Vector2D<T>& a, const size<T> &v)
+{
+  	return size<T>(a.x + v.width, a.y + v.height);
+}
+
+template <typename T>
+size<T> operator + (const size<T> &v, const Vector2D<T>& a)
 {
   	return size<T>(a.width + v.x, a.height + v.y);
 }
 
 template <typename T>
-size<T> operator + (const Vector2D<T> &v, const size<T>& a)
+void operator -= (const Vector2D<T>& a, const size<T>& b)
 {
-  	return size<T>(a.width + v.x, a.height + v.y);
+	a = a - b;
 }
 
 template <typename T>
-size<T> operator - (const size<T>& a, const Vector2D<T> &v)
+void operator -= (const size<T>& a, const Vector2D<T> &b)
 {
-  	return size<T>(a.width - v.x, a.height - v.y);
+	a = a - b;
 }
+
+template <typename T>
+void operator += (const Vector2D<T>& a, const size<T> &b)
+{
+	a = a + b;
+}
+
+template <typename T>
+void operator += (const size<T> &a, const Vector2D<T>& b)
+{
+	a = a + b;
+}
+
 
 template <typename Container>
 std::string Join(const Container& container, const std::string& delimiter)

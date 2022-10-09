@@ -57,12 +57,6 @@ void EshyWM::update_config()
             std::size_t npos = line.length() - 1;
             get_current_config()->resize_step_size_height = std::stoi(line.substr(spos, npos));
         }
-        else if(line.find("frame_window:") != std::string::npos)
-        {
-            std::size_t spos = line.find(" ");
-            std::size_t npos = line.length() - 1;
-            get_current_config()->frame_window = line.find("true") != std::string::npos ? true : false;
-        }
         else if(line.find("window_frame_border_width:") != std::string::npos)
         {
             std::size_t spos = line.find(" ");

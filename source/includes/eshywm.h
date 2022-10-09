@@ -2,6 +2,7 @@
 
 #include <string>
 #include <memory>
+#include <iostream>
 
 class EshyWM
 {
@@ -29,7 +30,7 @@ public:
 
 private:
 
-    EshyWM() {};
+    EshyWM() {}
 
     std::shared_ptr<class EshyWMConfig> current_config;
     std::shared_ptr<class WindowManager> window_manager;

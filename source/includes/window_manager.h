@@ -8,17 +8,30 @@ extern "C" {
 #include <memory>
 #include <mutex>
 #include <string>
-#include <unordered_map>
+#include <map>
 
 #include "util.h"
 #include "window.h"
-#include "window_list_container.h"
 
-typedef std::unordered_map<Window, EshyWMWindow*> window_map;
+typedef std::map<Window, EshyWMWindow*> window_map;
+
+enum class EWindowTileMode
+{
+    WTM_None,
+    WTM_Equal,          //Space everything equally
+    WTM_Adjustive,      //Changing size only affects focused window, rest only compensate (make space, claim space)
+    WTM_Seperate        //Every window is its own entity and do not effect each other
+};
 
 struct window_manager_data
 {
-    bool b_floating_mode;
+    bool b_tiling_mode;
+    EWindowTileMode window_tile_mode;
+
+    window_manager_data()
+        : b_tiling_mode(true)
+        , window_tile_mode(EWindowTileMode::WTM_Equal)
+    {}
 };
 
 class WindowManager
@@ -32,14 +45,16 @@ public:
 
     void Run();
 
+    void window_size_updated(EshyWMWindow* window);
+
     /**Getters*/
     static Display* get_display() {return display;}
     const Window get_root() {return root;}
 
-    int get_num_horizontal_slots() {return num_horizontal_slots;}
-    int get_num_vertical_slots() {return num_vertical_slots;}
+    window_map& get_frame_list() {return window_frame_list;}
+    window_map& get_titlebar_list() {return window_titlebar_list;}
 
-    window_map& get_window_list() {return window_list;}
+    window_manager_data* get_manager_data() const {return manager_data;}
 
     const Atom get_atom_wm_protocols() {return WM_PROTOCOLS;}
     const Atom get_atom_wm_delete_window() {return WM_DELETE_WINDOW;}
@@ -48,10 +63,6 @@ private:
 
     static Display* display;
     const Window root;
-
-    /**Current slots information*/
-    int num_horizontal_slots;
-    int num_vertical_slots;
 
     /**Mutex for protecting b_wm_detected*/
     static std::mutex mutex_wm_detected;
@@ -63,12 +74,16 @@ private:
     const Atom WM_PROTOCOLS;
     const Atom WM_DELETE_WINDOW;
 
-    /**A list of windows, sorted by titlebar, frame, and window*/
-    window_map window_list;
+    /**A list of windows, sorted by titlebar, frame*/
+    window_map window_frame_list;
     window_map window_titlebar_list;
 
-    /**Draws all drawables each frame*/
-    void draw();
+    window_manager_data* manager_data;
+
+    slot* main_slot;
+    slot* current_slot;
+
+    void main_loop();
 
     /**Event handlers*/
     void OnDestroyNotify(const XDestroyWindowEvent& event);
@@ -87,10 +102,9 @@ private:
 
     /**Helper functions*/
     EshyWMWindow* register_window(Window window, bool b_was_created_before_window_manager);
-    void unregister_window(Window window);
     void close_window(Window window);
     /**Initializes the slot, location, and size*/
-    void initialize_window(Window window, bool b_was_created_before_window_manager);
+    void initialize_window(EshyWMWindow* window, bool b_was_created_before_window_manager);
 
     void check_titlebar_button_pressed(Window window, int cursor_x, int cursor_y);
 };

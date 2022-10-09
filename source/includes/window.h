@@ -5,37 +5,33 @@ extern "C" {
 }
 
 #include "util.h"
-#include "window_position_data.h"
+#include "slot.h"
 
 /**
  * Handles everything about an individual window
 */
-class EshyWMWindow
+class EshyWMWindow : public slot_child
 {
 public:
 
     EshyWMWindow(Window _window);
 
-    EshyWMWindow(Window _window, window_position_data* _position_data)
-        : window(_window)
-        , position_data(_position_data)
-    {}
+    int horizontal_position;
+    int vertical_position;
 
     void frame_window(bool b_was_created_before_window_manager);
     void unframe_window();
-
     void setup_grab_events(bool b_was_created_before_window_manager);
+    void draw_titlebar_buttons();
+    void remove_grab_events();
+    void close_window();
 
+    void resize_window(Vector2D<int> delta);
+    void resize_window_absolute(size<int> new_size);
     void resize_window_horizontal_left_arrow();
     void resize_window_horizontal_right_arrow();
     void resize_window_vertical_up_arrow();
     void resize_window_vertical_down_arrow();
-
-    void resize_window(Vector2D<int> cursor_move_delta);
-
-    void draw_titlebar_buttons();
-
-    void close_window();
 
     void recalculate_all_window_size_and_location();
 
@@ -43,16 +39,13 @@ public:
     int is_cursor_on_titlebar_buttons(Window window, int cursor_x, int cursor_y);
 
     /**Getters*/
-    Window get_window() {return window;}
-    Window get_frame() {return frame;}
-    Window get_titlebar() {return titlebar;}
-    window_position_data* get_widnow_position_data() {return position_data;}
+    Window get_window() const {return window;}
+    Window get_frame() const {return frame;}
+    Window get_titlebar() const {return titlebar;}
     window_size_location_data get_frame_size_and_location_data() const {return frame_size_and_location_data;}
     window_size_location_data get_titlebar_size_and_location_data() const {return titlebar_size_and_location_data;}
     window_size_location_data get_window_size_and_location_data() const {return window_size_and_location_data;}
-
-    /**Setters*/
-    void set_window_position_data(window_position_data* new_window_position_data) {position_data = new_window_position_data;}
+    size<int> get_preferred_size() const {return preferred_size;}
 
 private:
 
@@ -60,22 +53,14 @@ private:
     Window frame;
     Window titlebar;
 
-    window_position_data* position_data;
     window_size_location_data frame_size_and_location_data;
     window_size_location_data titlebar_size_and_location_data;
     window_size_location_data window_size_and_location_data;
+
+    size<int> preferred_size;
 
     GC graphics_context_internal;
 
     int get_resize_step_horizontal() const;
     int get_resize_step_vertical() const;
-
-    /**Config*/
-    const unsigned int title_bar_height = 20;
-    const unsigned int title_bar_button_size = 18;
-    const unsigned int title_bar_button_padding = 4;
-
-    const unsigned int border_width = 2;
-    const unsigned long border_color = 0x2b2a38;
-    const unsigned long background_color = 0x15141f;
 };

@@ -8,20 +8,25 @@ extern "C" {
 }
 
 #include <vector>
+#include <algorithm>
 
 class slot_child
 {
 public:
 
-    virtual void set_preferred_size(size<int> new_preferred_size) {preferred_size = new_preferred_size;}
-    size<int> get_preferred_size() const {return preferred_size;}
+    virtual void set_preferred_size(Vector2D<int> new_preferred_size)
+    {
+        preferred_size.x = std::max(new_preferred_size.x, 1);
+        preferred_size.y = std::max(new_preferred_size.y, 1);
+    }
+    Vector2D<int> get_preferred_size() const {return preferred_size;}
 
     virtual void set_preferred_position(Vector2D<int> new_preferred_position) {preferred_position = new_preferred_position;}
     Vector2D<int> get_preferred_position() const {return preferred_position;}
 
-private:
+protected:
 
-    size<int> preferred_size;
+    Vector2D<int> preferred_size;
     Vector2D<int> preferred_position;
 };
 
@@ -36,14 +41,19 @@ public:
 
     slot(bool _b_horizontal)
         : b_horizontal(_b_horizontal)
-    {}
+    {
+        set_preferred_size(Vector2D<int>(0, 0));
+        set_preferred_position(Vector2D<int>(0, 0));
+    }
 
     void realign_content(slot_child* child_to_favor = nullptr);
-    void first_realign_content();
 
     void add_slot(slot_child* new_slot);
     void remove_slot(slot_child* slot_to_remove);
+    void move_slot(slot_child* slot_to_move, int move_amount);
     std::vector<slot_child*> get_content() const {return content;}
+    std::vector<slot_child*>& get_content_r() {return content;}
+    bool is_horizontal() const {return b_horizontal;}
 
 private:
 
@@ -51,4 +61,8 @@ private:
     bool b_horizontal;
 
     std::vector<slot_child*> content;
+
+    void realign_equal(slot_child* child_to_favor);
+    void realign_adjustive(slot_child* child_to_favor);
+    void realign_adjustive_reverse(slot_child* child_to_favor);
 };

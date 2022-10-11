@@ -8,7 +8,7 @@ find_package(X11 REQUIRED)
 find_package(glog REQUIRED)
 
 set(BIN_NAME eshywm)
-set(SOURCE_FILES main.cpp eshywm.cpp slot.cpp window.cpp window_manager.cpp util.cpp)
+set(SOURCE_FILES main.cpp eshywm.cpp slot.cpp window.cpp window_manager.cpp)
 list(TRANSFORM SOURCE_FILES PREPEND ${CMAKE_CURRENT_SOURCE_DIR}/source/)
 
 add_executable(${BIN_NAME} ${CMAKE_CURRENT_SOURCE_DIR}/source/main.cpp ${SOURCE_FILES})

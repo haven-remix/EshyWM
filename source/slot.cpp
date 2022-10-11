@@ -6,21 +6,69 @@ extern "C" {
 #include "slot.h"
 #include "eshywm.h"
 #include "window_manager.h"
+#include "util.h"
+
+#include <algorithm>
 
 void slot::realign_content(slot_child* child_to_favor)
 {
-    const int content_width = b_horizontal ? get_preferred_size().width / content.size() : get_preferred_size().width;
-    const int content_height = b_horizontal ? get_preferred_size().height : get_preferred_size().height / content.size();
-    const size<int> slot_size(content_width, content_height);
-    Vector2D<int> slot_position(0, 0);
+    if(EshyWM::get_window_manager()->get_manager_data()->window_tile_mode == EWindowTileMode::WTM_Equal)
+    {
+        realign_equal(child_to_favor);
+    }
+    else if(EshyWM::get_window_manager()->get_manager_data()->window_tile_mode == EWindowTileMode::WTM_Adjustive)
+    {
+        realign_adjustive(child_to_favor);
+    }
+}
 
+void slot::realign_equal(slot_child* child_to_favor)
+{
+    const Vector2D<int> slot_size(
+        b_horizontal ? get_preferred_size().x / content.size() : get_preferred_size().x,
+        b_horizontal ? get_preferred_size().y : get_preferred_size().y / content.size()
+    );
+
+    for(int i = 0; i < content.size(); i++)
+    {
+        content[i]->set_preferred_size(slot_size);
+        if(EshyWMWindow* window = dynamic_cast<EshyWMWindow*>(content[i]))
+        {
+            window->resize_window_absolute(content[i]->get_preferred_size());
+            XMoveWindow(
+                EshyWM::get_window_manager()->get_display(),
+                window->get_frame(),
+                b_horizontal ? (slot_size.x * i) : 0,
+                b_horizontal ? 0 : (slot_size.y * i)
+            );
+        }
+        else if (slot* s = dynamic_cast<slot*>(content[i]))
+        {
+            s->realign_content(child_to_favor);
+        }
+    }
+}
+
+void slot::realign_adjustive(slot_child* child_to_favor)
+{
+    const Vector2D<int> normal_slot_size(
+        b_horizontal ? (get_preferred_size().x - child_to_favor->get_preferred_size().x) / content.size() : 0,
+        b_horizontal ? 0 : (get_preferred_size().y - child_to_favor->get_preferred_size().y) / content.size()
+    );
+
+    Vector2D<int> slot_position(0, 0);
     for(slot_child* content_slot : content)
     {
-        //content_slot->set_preferred_size(slot_size);
+        const Vector2D<int> slot_size = content_slot->get_preferred_size();
         if(EshyWMWindow* window = dynamic_cast<EshyWMWindow*>(content_slot))
         {
-            window->resize_window_absolute(content_slot->get_preferred_size());
-            XMoveWindow(EshyWM::get_window_manager()->get_display(), window->get_frame(), slot_position.x, slot_position.y);
+            window->resize_window_absolute(slot_size);
+            XMoveWindow(
+                EshyWM::get_window_manager()->get_display(),
+                window->get_frame(),
+                b_horizontal ? slot_position.x : 0,
+                b_horizontal ? 0 : slot_position.y
+            );
         }
         else if (slot* s = dynamic_cast<slot*>(content_slot))
         {
@@ -30,29 +78,32 @@ void slot::realign_content(slot_child* child_to_favor)
     }
 }
 
-void slot::first_realign_content()
+void slot::realign_adjustive_reverse(slot_child* child_to_favor)
 {
-    Display* const display = EshyWM::get_window_manager()->get_display();
-    const size<int> display_size(DisplayWidth(display, DefaultScreen(display)), DisplayHeight(display, DefaultScreen(display)));
-    const size<int> slot_size(
-        b_horizontal ? display_size.width / content.size() : display_size.width,
-        b_horizontal ? display_size.height : display_size.height / content.size()
-    );
-    Vector2D<int> slot_position(0, 0);
-
-    for(slot_child* content_slot : content)
+    Vector2D<int> slot_position(preferred_position.x + preferred_size.x, preferred_position.y + preferred_size.y);
+    for(std::vector<slot_child*>::reverse_iterator it = content.rbegin(); it != content.rend(); it++)
     {
-        content_slot->set_preferred_size(slot_size);
-        if(EshyWMWindow* window = dynamic_cast<EshyWMWindow*>(content_slot))
+        Vector2D<int> slot_size = (*it)->get_preferred_size();
+        if(it == content.rend())
         {
-            window->resize_window_absolute(content_slot->get_preferred_size());
-            XMoveWindow(EshyWM::get_window_manager()->get_display(), window->get_frame(), b_horizontal ? slot_position.x : 0, b_horizontal ? 0 : slot_position.y);
+            slot_size = slot_position;
         }
-        else if (slot* s = dynamic_cast<slot*>(content_slot))
+
+        if(EshyWMWindow* window = dynamic_cast<EshyWMWindow*>(*it))
         {
-            s->first_realign_content();
+            window->resize_window_absolute(slot_size);
+            XMoveWindow(
+                EshyWM::get_window_manager()->get_display(),
+                window->get_frame(),
+                b_horizontal ? slot_position.x - slot_size.x : 0,
+                b_horizontal ? 0 : slot_position.y - slot_size.y
+            );
         }
-        slot_position += slot_size;
+        else if (slot* s = dynamic_cast<slot*>(*it))
+        {
+            s->realign_content(child_to_favor);
+        }
+        slot_position -= slot_size;
     }
 }
 
@@ -64,5 +115,33 @@ void slot::add_slot(slot_child* new_slot)
 
 void slot::remove_slot(slot_child* slot_to_remove)
 {
-    remove(content.begin(), content.end(), slot_to_remove);
+    for(int i = 0; i < content.size(); i++)
+    {
+        if(content[i] = slot_to_remove)
+        {
+            content.erase(content.begin() + i);
+            break;
+        }
+    }
+}
+
+void slot::move_slot(slot_child* slot_to_move, int move_amount)
+{
+    std::vector<slot_child*>::iterator i = std::find(content.begin(), content.end(), slot_to_move);
+
+    if(i != content.cend())
+    {
+        const int old_index = std::distance(content.begin(), i);
+        i = (i + move_amount == content.cend()) ? content.begin() : (i == content.begin() && move_amount < 0) ? content.end() - 1 : i + move_amount;
+        const int new_index = std::distance(content.begin(), i);
+
+        if (old_index > new_index)
+        {
+            std::rotate(content.rend() - old_index - 1, content.rend() - old_index, content.rend() - new_index);
+        }
+        else
+        {
+            std::rotate(content.begin() + old_index, content.begin() + old_index + 1, content.begin() + new_index + 1);
+        } 
+    }
 }

@@ -12,6 +12,7 @@ extern "C" {
 #include <iostream>
 #include <algorithm>
 
+
 bool WindowManager::b_wm_detected;
 std::mutex WindowManager::mutex_wm_detected;
 Display* WindowManager::display;
@@ -37,6 +38,8 @@ WindowManager::WindowManager()
     , manager_data(new window_manager_data())
 {
     main_slot = new slot(true);
+    main_slot->set_preferred_position(Vector2D<int>(0, 0));
+    main_slot->set_preferred_size(Vector2D<int>(DisplayWidth(display, DefaultScreen(display)), DisplayHeight(display, DefaultScreen(display))));
     current_slot = main_slot;
 }
 
@@ -136,14 +139,7 @@ void WindowManager::main_loop()
 
 void WindowManager::window_size_updated(EshyWMWindow* window)
 {
-    window->resize_window_absolute(window->get_preferred_size());
-    for(auto &[frame, w] : window_frame_list)
-    {
-        if(w == window)
-        {
-
-        }
-    }
+    main_slot->realign_content(window);
 }
 
 
@@ -160,13 +156,6 @@ int WindowManager::OnXError(Display* display, XErrorEvent* event)
     char error_text[MAX_ERROR_TEXT_LEGTH];
 
     XGetErrorText(display, event->error_code, error_text, sizeof(error_text));
-
-    LOG(ERROR) << "Received X error:\n"
-               << "    Request: " << int(event->request_code)
-               << " - " << XRequestCodeToString(event->request_code) << "\n"
-               << "    Error code: " << int(event->error_code)
-               << " - " << error_text << "\n"
-               << "    Resource ID: " << event->resourceid;
 
     return 0;
 }
@@ -215,12 +204,10 @@ void WindowManager::OnConfigureRequest(const XConfigureRequestEvent& event)
     {
         const Window frame = event.window;
         XConfigureWindow(display, frame, event.value_mask, &changes);
-        LOG(INFO) << "Resize [" << frame << "] to " << size<int>(event.width, event.height);
     }
 
     //Grant request
     XConfigureWindow(display, event.window, event.value_mask, &changes);
-    LOG(INFO) << "Resize " << event.window << " to " << size<int>(event.width, event.height);
 }
 
 void WindowManager::OnMapRequest(const XMapRequestEvent& event)
@@ -286,11 +273,16 @@ void WindowManager::OnMotionNotify(const XMotionEvent& event)
 
 void WindowManager::OnKeyPress(const XKeyEvent& event)
 {
-    if ((event.state & Mod1Mask) && (event.keycode == XKeysymToKeycode(display, XK_C)))
+    if(!(event.state & Mod1Mask))
+    {
+        return;
+    }
+
+    if (event.keycode == XKeysymToKeycode(display, XK_C))
     {
         close_window(event.window);
     }
-    else if ((event.state & Mod1Mask) && (event.keycode == XKeysymToKeycode(display, XK_Tab)))
+    else if (event.keycode == XKeysymToKeycode(display, XK_Tab))
     {
         //Find next window
         auto i = window_frame_list.find(event.window);
@@ -305,19 +297,38 @@ void WindowManager::OnKeyPress(const XKeyEvent& event)
         XRaiseWindow(display, i->first);
         XSetInputFocus(display, window_frame_list[i->first]->get_window(), RevertToPointerRoot, CurrentTime);
     }
-    else if((event.state & Mod1Mask) && (event.keycode == XKeysymToKeycode(display, XK_Left)))
+    else if(event.state & ControlMask)
+    {
+        if (event.keycode == XKeysymToKeycode(display, XK_Left))
+        {
+            window_frame_list[event.window]->move_window_horizontal_left_arrow();
+        }
+        else if(event.keycode == XKeysymToKeycode(display, XK_Right))
+        {
+            window_frame_list[event.window]->move_window_horizontal_right_arrow();
+        }
+        else if(event.keycode == XKeysymToKeycode(display, XK_Up))
+        {
+            window_frame_list[event.window]->move_window_vertical_up_arrow();
+        }
+        else if(event.keycode == XKeysymToKeycode(display, XK_Down))
+        {
+            window_frame_list[event.window]->move_window_vertical_down_arrow();
+        }
+    }
+    else if(event.keycode == XKeysymToKeycode(display, XK_Left))
     {
         window_frame_list[event.window]->resize_window_horizontal_left_arrow();
     }
-    else if((event.state & Mod1Mask) && (event.keycode == XKeysymToKeycode(display, XK_Right)))
+    else if(event.keycode == XKeysymToKeycode(display, XK_Right))
     {
         window_frame_list[event.window]->resize_window_horizontal_right_arrow();
     }
-    else if((event.state & Mod1Mask) && (event.keycode == XKeysymToKeycode(display, XK_Up)))
+    else if(event.keycode == XKeysymToKeycode(display, XK_Up))
     {
         window_frame_list[event.window]->resize_window_vertical_up_arrow();
     }
-    else if((event.state & Mod1Mask) && (event.keycode == XKeysymToKeycode(display, XK_Down)))
+    else if(event.keycode == XKeysymToKeycode(display, XK_Down))
     {
         window_frame_list[event.window]->resize_window_vertical_down_arrow();
     }
@@ -339,7 +350,7 @@ EshyWMWindow* WindowManager::register_window(Window window, bool b_was_created_b
     //Add so we can restore if we crash
     XAddToSaveSet(get_display(), window);
 
-    EshyWMWindow* new_window = new EshyWMWindow(window);
+    EshyWMWindow* new_window = new EshyWMWindow(window, current_slot);
     new_window->frame_window(b_was_created_before_window_manager);
     new_window->setup_grab_events(b_was_created_before_window_manager);
     window_frame_list.emplace(new_window->get_frame(), new_window);
@@ -374,7 +385,7 @@ void WindowManager::initialize_window(EshyWMWindow* window, bool b_was_created_b
     {
         return;
     }
-    
+
     //Retrieve attributes of window to frame
     XWindowAttributes x_window_attributes = {0};
     XGetWindowAttributes(display, window->get_window(), &x_window_attributes);
@@ -386,7 +397,11 @@ void WindowManager::initialize_window(EshyWMWindow* window, bool b_was_created_b
     }
 
     current_slot->add_slot(window);
-    current_slot->realign_content();
+    current_slot->realign_content(main_slot->get_content().size() == 1 ? nullptr : window);
+    if(main_slot->get_content().size() == 2)
+    {
+        manager_data->window_tile_mode = EWindowTileMode::WTM_Adjustive;
+    }
 }
 
 void WindowManager::check_titlebar_button_pressed(Window window, int cursor_x, int cursor_y)

@@ -40,6 +40,23 @@ public:
 	{}
 };
 
+struct rect
+{
+	int x;
+    int y;
+	unsigned int width;
+	unsigned int height;
+
+	rect() = default;
+
+	rect(int _x, int _y, unsigned int _width, unsigned int _height)
+      : x(_x)
+      , y(_y)
+	  , width(_width)
+	  , height(_height)
+    {}
+};
+
 struct window_size_location_data
 {
     int x;

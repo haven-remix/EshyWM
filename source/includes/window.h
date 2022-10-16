@@ -5,16 +5,15 @@ extern "C" {
 }
 
 #include "util.h"
-#include "slot.h"
 
 /**
  * Handles everything about an individual window
 */
-class EshyWMWindow : public slot_child
+class EshyWMWindow
 {
 public:
 
-    EshyWMWindow(Window _window, slot* _parent_slot);
+    EshyWMWindow(Window _window);
 
     void frame_window(bool b_was_created_before_window_manager);
     void unframe_window();
@@ -30,11 +29,6 @@ public:
     void resize_window_vertical_up_arrow();
     void resize_window_vertical_down_arrow();
 
-    void move_window_horizontal_left_arrow();
-    void move_window_horizontal_right_arrow();
-    void move_window_vertical_up_arrow();
-    void move_window_vertical_down_arrow();
-
     void recalculate_all_window_size_and_location();
 
     /**@return 0 = none; 1 = minimize; 2 = maximize; 3 = close*/
@@ -44,9 +38,9 @@ public:
     Window get_window() const {return window;}
     Window get_frame() const {return frame;}
     Window get_titlebar() const {return titlebar;}
-    window_size_location_data get_frame_size_and_location_data() const {return frame_size_and_location_data;}
-    window_size_location_data get_titlebar_size_and_location_data() const {return titlebar_size_and_location_data;}
-    window_size_location_data get_window_size_and_location_data() const {return window_size_and_location_data;}
+    rect get_frame_size_and_location_data() const {return frame_size_and_location_data;}
+    rect get_titlebar_size_and_location_data() const {return titlebar_size_and_location_data;}
+    rect get_window_size_and_location_data() const {return window_size_and_location_data;}
 
 private:
 
@@ -54,13 +48,11 @@ private:
     Window frame;
     Window titlebar;
 
-    window_size_location_data frame_size_and_location_data;
-    window_size_location_data titlebar_size_and_location_data;
-    window_size_location_data window_size_and_location_data;
+    rect frame_size_and_location_data;
+    rect titlebar_size_and_location_data;
+    rect window_size_and_location_data;
 
     GC graphics_context_internal;
-
-    slot* parent_slot;
 
     int get_resize_step_horizontal() const;
     int get_resize_step_vertical() const;

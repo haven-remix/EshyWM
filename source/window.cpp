@@ -13,7 +13,7 @@ extern "C" {
 #include <algorithm>
 
 
-EshyWMWindow::EshyWMWindow(Window _window, slot* _parent_slot) : window(_window), parent_slot(_parent_slot)
+EshyWMWindow::EshyWMWindow(Window _window) : window(_window)
 {
 }
 
@@ -262,7 +262,7 @@ int EshyWMWindow::is_cursor_on_titlebar_buttons(Window window, int cursor_x, int
 
 void EshyWMWindow::resize_window(Vector2D<int> delta)
 {
-    const window_size_location_data data = get_frame_size_and_location_data();
+    const rect data = get_frame_size_and_location_data();
     const Vector2D<int> size_delta(std::max(delta.x, -(int)data.width), std::max(delta.y, -(int)data.height));
     const Vector2D<int> final_frame_size = Vector2D<int>(data.width, data.height) + size_delta;
 
@@ -272,8 +272,6 @@ void EshyWMWindow::resize_window(Vector2D<int> delta)
         XResizeWindow(EshyWM::get_window_manager()->get_display(), titlebar, final_frame_size.x, EshyWM::get_current_config()->titlebar_height);
     }
     XResizeWindow(EshyWM::get_window_manager()->get_display(), window, final_frame_size.x, final_frame_size.y - (EshyWM::get_window_manager()->get_manager_data()->b_tiling_mode ? 0 : EshyWM::get_current_config()->titlebar_height));
-
-    preferred_size = final_frame_size;
 }
 
 void EshyWMWindow::resize_window_absolute(Vector2D<int> new_size)
@@ -284,20 +282,18 @@ void EshyWMWindow::resize_window_absolute(Vector2D<int> new_size)
         XResizeWindow(EshyWM::get_window_manager()->get_display(), titlebar, new_size.x, EshyWM::get_current_config()->titlebar_height);
     }
     XResizeWindow(EshyWM::get_window_manager()->get_display(), window, new_size.x, new_size.y - (EshyWM::get_window_manager()->get_manager_data()->b_tiling_mode ? 0 : EshyWM::get_current_config()->titlebar_height));
-
-    preferred_size = new_size;
 }
 
 void EshyWMWindow::resize_window_horizontal_left_arrow()
 {
-    set_preferred_size(Vector2D<int>(preferred_size.x + get_resize_step_horizontal(), preferred_size.y));
-    EshyWM::get_window_manager()->window_size_updated(this);
+    //set_preferred_size(Vector2D<int>(get_preferred_size().x + get_resize_step_horizontal(), get_preferred_size().y));
+    //EshyWM::get_window_manager()->window_size_updated(this);
 }
 
 void EshyWMWindow::resize_window_horizontal_right_arrow()
 {
-    set_preferred_size(Vector2D<int>(preferred_size.x - get_resize_step_horizontal(), preferred_size.y));
-    EshyWM::get_window_manager()->window_size_updated(this);
+    //set_preferred_size(Vector2D<int>(get_preferred_size().x - get_resize_step_horizontal(), get_preferred_size().y));
+    //EshyWM::get_window_manager()->window_size_updated(this);
 }
 
 void EshyWMWindow::resize_window_vertical_up_arrow()
@@ -311,43 +307,6 @@ void EshyWMWindow::resize_window_vertical_down_arrow()
 }
 
 
-void EshyWMWindow::move_window_horizontal_left_arrow()
-{
-    if(parent_slot->is_horizontal())
-    {
-        parent_slot->move_slot(this, -1);
-        EshyWM::get_window_manager()->window_size_updated(this);
-    }
-}
-
-void EshyWMWindow::move_window_horizontal_right_arrow()
-{
-    if(parent_slot->is_horizontal())
-    {
-        parent_slot->move_slot(this, 1);
-        EshyWM::get_window_manager()->window_size_updated(this);
-    }
-}
-
-void EshyWMWindow::move_window_vertical_up_arrow()
-{
-    if(!parent_slot->is_horizontal())
-    {
-        parent_slot->move_slot(this, -1);
-        EshyWM::get_window_manager()->window_size_updated(this);
-    }
-}
-
-void EshyWMWindow::move_window_vertical_down_arrow()
-{
-    if(!parent_slot->is_horizontal())
-    {
-        parent_slot->move_slot(this, 1);
-        EshyWM::get_window_manager()->window_size_updated(this);
-    }
-}
-
-
 void EshyWMWindow::recalculate_all_window_size_and_location()
 {
     Window return_window;
@@ -358,14 +317,14 @@ void EshyWMWindow::recalculate_all_window_size_and_location()
     unsigned int height;
 
     XGetGeometry(EshyWM::get_window_manager()->get_display(), frame, &return_window, &x, &y, &width, &height, &unsigned_null, &unsigned_null);
-    frame_size_and_location_data = window_size_location_data(x, y, width, height);
+    frame_size_and_location_data = rect(x, y, width, height);
     if(!EshyWM::get_window_manager()->get_manager_data()->b_tiling_mode)
     {
         XGetGeometry(EshyWM::get_window_manager()->get_display(), titlebar, &return_window, &x, &y, &width, &height, &unsigned_null, &unsigned_null);
-        titlebar_size_and_location_data = window_size_location_data(x, y, width, height);
+        titlebar_size_and_location_data = rect(x, y, width, height);
     }
     XGetGeometry(EshyWM::get_window_manager()->get_display(), window, &return_window, &x, &y, &width, &height, &unsigned_null, &unsigned_null);
-    window_size_and_location_data = window_size_location_data(x, y, width, height);
+    window_size_and_location_data = rect(x, y, width, height);
 }
 
 int EshyWMWindow::get_resize_step_horizontal() const

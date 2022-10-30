@@ -56,25 +56,3 @@ struct rect
 	  , height(_height)
     {}
 };
-
-struct window_size_location_data
-{
-    int x;
-    int y;
-	unsigned int width;
-	unsigned int height;
-
-    window_size_location_data() = default;
-    
-    window_size_location_data(int _x, int _y)
-      : x(_x)
-      , y(_y)
-    {}
-
-	window_size_location_data(int _x, int _y, unsigned int _width, unsigned int _height)
-      : x(_x)
-      , y(_y)
-	  , width(_width)
-	  , height(_height)
-    {}
-};

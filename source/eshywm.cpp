@@ -115,7 +115,7 @@ void EshyWM::run_startup_commands()
 }
 
 
-void EshyWM::on_screen_resolution_changed()
+void EshyWM::on_screen_resolution_changed(uint new_width, uint new_height)
 {
     //Reset the background to match the screen size
     update_background();

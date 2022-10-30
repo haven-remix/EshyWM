@@ -1,8 +1,8 @@
 #include "window_manager.h"
-#include "container.h"
 #include "eshywm.h"
 #include "window.h"
 #include "config.h"
+#include "taskbar.h"
 
 extern "C" {
 #include <X11/Xutil.h>
@@ -14,11 +14,12 @@ extern "C" {
 #include <iostream>
 #include <algorithm>
 
+#define CHECK_KEYSYM_TO_KEYCODE(event, key_code)      if(event.keycode == XKeysymToKeycode(DISPLAY, key_code))
+#define ELSE_CHECK_KEYSYM_TO_KEYCODE(event, key_code) else if(event.keycode == XKeysymToKeycode(DISPLAY, key_code))
 
 bool WindowManager::b_wm_detected;
 std::mutex WindowManager::mutex_wm_detected;
 Display* WindowManager::display;
-
 
 std::shared_ptr<WindowManager> WindowManager::Create(const std::string& display_str)
 {
@@ -40,7 +41,7 @@ WindowManager::WindowManager()
     , manager_data(new window_manager_data())
 {
     display_width = DisplayWidth(display, DefaultScreen(display));
-    display_height = DisplayHeight(display, DefaultScreen(display));
+    display_height = DisplayHeight(display, DefaultScreen(display)) - (manager_data->b_tiling_mode ? 0 : CONFIG->taskbar_height);
     root_container = std::make_shared<container>(EOrientation::O_Horizontal, EContainerType::CT_Root);
     root_container->set_size(display_width, display_height);
 }
@@ -49,7 +50,6 @@ WindowManager::~WindowManager()
 {
     XCloseDisplay(display);
 }
-
 
 void WindowManager::Run()
 {
@@ -65,6 +65,10 @@ void WindowManager::Run()
         LOG(ERROR) << "Detected another window manager on display " << XDisplayString(display);
         return;
     }
+
+    //Create taskbar
+    taskbar = std::make_shared<EshyWMTaskbar>();
+    taskbar->initialize_taskbar();
 
     //Handle windows already existing when the window manager is started
 
@@ -83,24 +87,29 @@ void WindowManager::Run()
     //Register, frame, and setup grab events for each top level window
     for(unsigned int i = 0; i < num_top_level_windows; ++i)
     {
-        register_window(top_level_windows[i], true);
+        if(top_level_windows[i] != taskbar->get_taskbar())
+        {
+            register_window(top_level_windows[i], true);
+        }
     }
 
-    //Free top-level window array
     XFree(top_level_windows);
-
-    //Ungrab X server
     XUngrabServer(display);
 
-    //Main event loop
     for (;;)
     {
         main_loop();
     }
+
+    XUngrabButton(display, XKeysymToKeycode(display, XK_Tab), Mod1Mask, root);
 }
 
 void WindowManager::main_loop()
 {
+    //Make sure the lists are up to date
+    frame_list = root_container->get_all_container_map_by_frame();
+    titlebar_list = root_container->get_all_container_map_by_titlebar();
+
     //Get next event
     XEvent event;
     XNextEvent(display, &event);
@@ -120,8 +129,14 @@ void WindowManager::main_loop()
     case ConfigureRequest:
         OnConfigureRequest(event.xconfigurerequest);
         break;
+    case VisibilityNotify:
+        OnVisibilityNotify(event.xvisibility);
+        break;
     case ButtonPress:
         OnButtonPress(event.xbutton);
+        break;
+    case ButtonRelease:
+        OnButtonRelease(event.xbutton);
         break;
     case MotionNotify:
         while (XCheckTypedWindowEvent(display, event.xmotion.window, MotionNotify, &event)) {}
@@ -130,67 +145,35 @@ void WindowManager::main_loop()
     case KeyPress:
         OnKeyPress(event.xkey);
         break;
+    case KeyRelease:
+        OnKeyRelease(event.xkey);
+        break;
     }
 
-    for(auto &[titlebar, container] : root_container->get_all_container_map_by_titlebar())
+    for(auto &[titlebar, container] : titlebar_list)
     {
-        container->get_window()->draw_titlebar_buttons();
+        container->get_window()->draw_titlebar();
     }
+
+    taskbar->draw_taskbar();
 }
-
-
-void WindowManager::container_size_updated(std::weak_ptr<container> updated_container)
-{
-    
-}
-
-void WindowManager::container_moved(std::weak_ptr<container> moved_container)
-{
-    const ordered_container_map_t horizontal_list = root_container->get_all_container_map_by_horizontal_position();
-    const ordered_container_map_t vertical_list = root_container->get_all_container_map_by_vertical_position();
-
-    int from_previous = 0;
-    for(auto &[p, c] : horizontal_list)
-    {
-        XMoveWindow(display, c->get_window()->get_frame(), from_previous, 0);
-        from_previous += c->get_size_and_position().width;
-    }
-}
-
-
-int WindowManager::OnWMDetected(Display* display, XErrorEvent* event)
-{
-    CHECK_EQ(static_cast<int>(event->error_code), BadAccess);
-    b_wm_detected = true;
-    return 0;
-}
-
-int WindowManager::OnXError(Display* display, XErrorEvent* event)
-{
-    const int MAX_ERROR_TEXT_LEGTH = 1024;
-    char error_text[MAX_ERROR_TEXT_LEGTH];
-
-    XGetErrorText(display, event->error_code, error_text, sizeof(error_text));
-
-    return 0;
-}
-
 
 void WindowManager::OnConfigureNotify(const XConfigureEvent& event)
 {
     if(event.window == root)
     {
-        display_width = DisplayWidth(display, DefaultScreen(display));
-        display_height = DisplayHeight(display, DefaultScreen(display));
+        display_width = event.width;
+        display_height = event.height - (manager_data->b_tiling_mode ? 0 : CONFIG->taskbar_height);
+        taskbar->update_taskbar_size(event.width, event.height);
+
         //Notify screen resolution changed
-        EshyWM::Get().on_screen_resolution_changed();
+        EshyWM::Get().on_screen_resolution_changed(event.width, event.height);
+        rescale_windows(event.window, event.height);
     }
 }
 
 void WindowManager::OnUnmapNotify(const XUnmapEvent& event)
 {
-    const organized_container_map_t frame_list = root_container->get_all_container_map_by_frame();
-
     //If we manage window then unframe. Need to check bcause we will receive an UnmapNotify event for a frame window we just destroyed
     if(!frame_list.count(event.window))
     {
@@ -210,8 +193,6 @@ void WindowManager::OnUnmapNotify(const XUnmapEvent& event)
 
 void WindowManager::OnConfigureRequest(const XConfigureRequestEvent& event)
 {
-    const organized_container_map_t frame_list = root_container->get_all_container_map_by_frame();
-
     XWindowChanges changes;
     changes.x = event.x;
     changes.y = event.y;
@@ -238,11 +219,16 @@ void WindowManager::OnMapRequest(const XMapRequestEvent& event)
     XMapWindow(display, event.window);
 }
 
+void WindowManager::OnVisibilityNotify(const XVisibilityEvent& event)
+{
+    if(taskbar && event.window == taskbar->get_taskbar())
+    {
+        taskbar->raise_taskbar();
+    }
+}
+
 void WindowManager::OnButtonPress(const XButtonEvent& event)
 {
-    const organized_container_map_t frame_list = root_container->get_all_container_map_by_frame();
-    const organized_container_map_t titlebar_list = root_container->get_all_container_map_by_titlebar();
-
     //Check in case the last press closed the window
     if(frame_list.count(event.window) || titlebar_list.count(event.window))
     {
@@ -259,23 +245,54 @@ void WindowManager::OnButtonPress(const XButtonEvent& event)
 
         check_titlebar_button_pressed(event.window, event.x, event.y);
     }
+
+    if (titlebar_list.count(event.window))
+    {
+        if(event.time - first_click_time < CONFIG->double_click_time && first_click_window == event.window)
+        {
+            titlebar_list.at(event.window)->get_window()->maximize_window();
+        }
+        else
+        {
+            first_click_time = event.time;
+            first_click_window = event.window;
+        }
+    }
+
+    if(event.window == taskbar->get_taskbar())
+    {
+        XSetInputFocus(display, event.window, RevertToPointerRoot, event.time);
+        //Pass the click event through
+        XAllowEvents(display, ReplayPointer, event.time);
+        taskbar->check_taskbar_button_clicked(event.x, event.y);
+    }
+}
+
+void WindowManager::OnButtonRelease(const XButtonEvent& event)
+{
+    if(event.state & Button1Mask || event.state & Button3Mask)
+    {
+        if(frame_list.count(event.window))
+        {
+            frame_list.at(event.window)->get_window()->motion_modify_ended();
+        }
+        else if (titlebar_list.count(event.window))
+        {
+            titlebar_list.at(event.window)->get_window()->motion_modify_ended();
+        }
+    }
 }
 
 void WindowManager::OnMotionNotify(const XMotionEvent& event)
 {
-    const organized_container_map_t frame_list = root_container->get_all_container_map_by_frame();
-    const organized_container_map_t titlebar_list = root_container->get_all_container_map_by_titlebar();
-
     const Vector2D<int> delta = Vector2D<int>(event.x_root, event.y_root) - drag_start_position;
 
     if(titlebar_list.count(event.window))
     {
         if(event.state & Button1Mask)
         {
-            const rect data = titlebar_list.at(event.window)->get_window()->get_frame_size_and_location_data();
-            const Vector2D<int> dest_frame_position = Vector2D<int>(data.x, data.y) + delta;
-            XMoveWindow(display, titlebar_list.at(event.window)->get_window()->get_frame(), dest_frame_position.x, dest_frame_position.y);
-            titlebar_list.at(event.window)->get_window()->draw_titlebar_buttons();
+            titlebar_list.at(event.window)->get_window()->move_window(delta);
+            titlebar_list.at(event.window)->get_window()->draw_titlebar();
         }
         else if (event.state & Button3Mask)
         {
@@ -286,16 +303,14 @@ void WindowManager::OnMotionNotify(const XMotionEvent& event)
     {
         if(event.state & Button1Mask)
         {
-            const rect data = frame_list.at(event.window)->get_window()->get_frame_size_and_location_data();
-            const Vector2D<int> dest_frame_position = Vector2D<int>(data.x, data.y) + delta;
-            XMoveWindow(display, event.window, dest_frame_position.x, dest_frame_position.y);
-            frame_list.at(event.window)->get_window()->draw_titlebar_buttons();
+            frame_list.at(event.window)->get_window()->move_window(delta);
+            frame_list.at(event.window)->get_window()->draw_titlebar();
         }
         else if(event.state & Button3Mask)
         {
             frame_list.at(event.window)->get_window()->resize_window(delta);
         }
-    }    
+    }
 }
 
 void WindowManager::OnKeyPress(const XKeyEvent& event)
@@ -305,63 +320,46 @@ void WindowManager::OnKeyPress(const XKeyEvent& event)
         return;
     }
 
-    const organized_container_map_t frame_list = root_container->get_all_container_map_by_frame();
-    const organized_container_map_t titlebar_list = root_container->get_all_container_map_by_titlebar();
-
-    if (event.keycode == XKeysymToKeycode(display, XK_C))
-    {
-        close_window(event.window);
-    }
-    else if (event.keycode == XKeysymToKeycode(display, XK_Tab))
-    {
-        //Find next window
-        auto i = frame_list.find(event.window);
-        CHECK(i != frame_list.end());
-        i++;
-        if(i == frame_list.end())
-        {
-            i = frame_list.begin();
-        }
-
-        //Raise and set focus
-        XRaiseWindow(display, i->first);
-        XSetInputFocus(display, frame_list.at(i->first)->get_window()->get_window(), RevertToPointerRoot, CurrentTime);
-    }
+    CHECK_KEYSYM_TO_KEYCODE(event, XK_C)
+    frame_list.at(event.window)->get_window()->close_window();
     else if(event.state & ControlMask)
     {
-        if (event.keycode == XKeysymToKeycode(display, XK_Left))
-        {
-            frame_list.at(event.window)->move_window_horizontal_left_arrow();
-        }
-        else if(event.keycode == XKeysymToKeycode(display, XK_Right))
-        {
-            frame_list.at(event.window)->move_window_horizontal_right_arrow();
-        }
-        else if(event.keycode == XKeysymToKeycode(display, XK_Up))
-        {
-            frame_list.at(event.window)->move_window_vertical_up_arrow();
-        }
-        else if(event.keycode == XKeysymToKeycode(display, XK_Down))
-        {
-            frame_list.at(event.window)->move_window_vertical_down_arrow();
-        }
+        CHECK_KEYSYM_TO_KEYCODE(event, XK_Left)
+        frame_list.at(event.window)->move_window_horizontal_left_arrow();
+        ELSE_CHECK_KEYSYM_TO_KEYCODE(event, XK_Right)
+        frame_list.at(event.window)->move_window_horizontal_right_arrow();
+        ELSE_CHECK_KEYSYM_TO_KEYCODE(event, XK_Up)
+        frame_list.at(event.window)->move_window_vertical_up_arrow();
+        ELSE_CHECK_KEYSYM_TO_KEYCODE(event, XK_Down)
+        frame_list.at(event.window)->move_window_vertical_down_arrow();
     }
-    else if(event.keycode == XKeysymToKeycode(display, XK_Left))
-    {
-        frame_list.at(event.window)->get_window()->resize_window_horizontal_left_arrow();
-    }
-    else if(event.keycode == XKeysymToKeycode(display, XK_Right))
-    {
-        frame_list.at(event.window)->get_window()->resize_window_horizontal_right_arrow();
-    }
-    else if(event.keycode == XKeysymToKeycode(display, XK_Up))
-    {
-        frame_list.at(event.window)->get_window()->resize_window_vertical_up_arrow();
-    }
-    else if(event.keycode == XKeysymToKeycode(display, XK_Down))
-    {
-        frame_list.at(event.window)->get_window()->resize_window_vertical_down_arrow();
-    }
+    ELSE_CHECK_KEYSYM_TO_KEYCODE(event, XK_f | XK_F)
+    frame_list.at(event.window)->get_window()->maximize_window();
+    ELSE_CHECK_KEYSYM_TO_KEYCODE(event, XK_a | XK_A)
+    frame_list.at(event.window)->get_window()->minimize_window();
+}
+
+void WindowManager::OnKeyRelease(const XKeyEvent& event)
+{
+    
+}
+
+
+int WindowManager::OnWMDetected(Display* display, XErrorEvent* event)
+{
+    CHECK_EQ(static_cast<int>(event->error_code), BadAccess);
+    b_wm_detected = true;
+    return 0;
+}
+
+int WindowManager::OnXError(Display* display, XErrorEvent* event)
+{
+    const int MAX_ERROR_TEXT_LEGTH = 1024;
+    char error_text[MAX_ERROR_TEXT_LEGTH];
+
+    XGetErrorText(display, event->error_code, error_text, sizeof(error_text));
+
+    return 0;
 }
 
 
@@ -369,7 +367,7 @@ std::shared_ptr<EshyWMWindow> WindowManager::register_window(Window window, bool
 {
     //Retrieve attributes of window to frame
     XWindowAttributes x_window_attributes = {0};
-    CHECK(XGetWindowAttributes(display, window, &x_window_attributes));
+    XGetWindowAttributes(display, window, &x_window_attributes);
 
     //If window was created before window manager started, we should frame it only if it is visible and does not set override_redirect
     if(b_was_created_before_window_manager && (x_window_attributes.override_redirect || x_window_attributes.map_state != IsViewable))
@@ -383,46 +381,27 @@ std::shared_ptr<EshyWMWindow> WindowManager::register_window(Window window, bool
     std::shared_ptr<container> leaf_container = std::make_shared<container>(EOrientation::O_Horizontal, EContainerType::CT_Leaf);
     leaf_container->create_window(window);
     root_container->add_internal_container(leaf_container);
+    taskbar->add_button(leaf_container->get_window());
     return leaf_container->get_window();
 }
 
-void WindowManager::close_window(Window window)
+void WindowManager::rescale_windows(uint width, uint height)
 {
-    const organized_container_map_t frame_list = root_container->get_all_container_map_by_frame();
-    const organized_container_map_t titlebar_list = root_container->get_all_container_map_by_titlebar();
-
-    if(titlebar_list.count(window))
-    {
-        const std::shared_ptr<EshyWMWindow> closed_window = titlebar_list.at(window)->get_window();
-        titlebar_list.at(window)->get_window()->close_window();
-    }
-    else if (frame_list.count(window))
-    {
-        const std::shared_ptr<EshyWMWindow> closed_window = frame_list.at(window)->get_window();
-        frame_list.at(window)->get_window()->close_window();
-    }
+    
 }
 
 void WindowManager::check_titlebar_button_pressed(Window window, int cursor_x, int cursor_y)
 {
-    const organized_container_map_t titlebar_list = root_container->get_all_container_map_by_titlebar();
-
     //This will check if the window is a frame (so we can't check the same area, but for a client window)
     if(titlebar_list.count(window))
     {
         const int button_pressed = titlebar_list.at(window)->get_window()->is_cursor_on_titlebar_buttons(window, cursor_x, cursor_y);
 
         if(button_pressed == 1)
-        {
-            
-        }
+        titlebar_list.at(window)->get_window()->minimize_window();
         else if(button_pressed == 2)
-        {
-
-        }
+        titlebar_list.at(window)->get_window()->maximize_window();
         else if(button_pressed == 3)
-        {
-            close_window(window);
-        }
+        titlebar_list.at(window)->get_window()->close_window();
     }
 }

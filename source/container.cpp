@@ -63,25 +63,25 @@ std::shared_ptr<class EshyWMWindow> container::create_window(Window window)
 void container::move_window_horizontal_left_arrow()
 {
     horizontal_position = std::max(0, horizontal_position--);
-    EshyWM::get_window_manager()->container_size_updated(shared_from_this());
+    //EshyWM::get_window_manager()->container_size_updated(shared_from_this());
 }
 
 void container::move_window_horizontal_right_arrow()
 {
     horizontal_position++;
-    EshyWM::get_window_manager()->container_size_updated(shared_from_this());
+    //EshyWM::get_window_manager()->container_size_updated(shared_from_this());
 }
 
 void container::move_window_vertical_up_arrow()
 {
     vertical_position = std::max(0, vertical_position--);
-    EshyWM::get_window_manager()->container_size_updated(shared_from_this());
+    //EshyWM::get_window_manager()->container_size_updated(shared_from_this());
 }
 
 void container::move_window_vertical_down_arrow()
 {
     vertical_position--;
-    EshyWM::get_window_manager()->container_size_updated(shared_from_this());
+    //EshyWM::get_window_manager()->container_size_updated(shared_from_this());
 }
 
 

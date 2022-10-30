@@ -1,5 +1,11 @@
 #pragma once
 
+extern "C" {
+#include <X11/Xlib.h>
+}
+
+#include <string>
+
 class EshyWMConfig
 {
 public:
@@ -18,7 +24,15 @@ public:
     int titlebar_height;
     unsigned int titlebar_button_size;
     unsigned int titlebar_button_padding;
-    unsigned long titlebar_button_color;
+    unsigned long titlebar_button_normal_color;
+    unsigned long titlebar_button_hovered_color;
+    unsigned long titlebar_button_pressed_color;
+    unsigned long titlebar_title_color;
+
+    unsigned int taskbar_height;
+    unsigned long taskbar_color;
+
+    Time double_click_time;
 
     std::string background_path;
 
@@ -37,10 +51,17 @@ public:
         window_frame_border_color = 0x3d3a5c;
         window_background_color = 0x15141f;
 
-        titlebar_height = 20;
+        titlebar_height = 22;
         titlebar_button_size = 18;
         titlebar_button_padding = 4;
-        titlebar_button_color = 0x47436b;
+        titlebar_button_normal_color = 0x47436b;
+        titlebar_button_hovered_color = 0x47436b;
+        titlebar_title_color = 0xededed;
+
+        taskbar_height = 30;
+        taskbar_color = 0x283140;
+
+        double_click_time = 500;
 
         background_path = "";
 

@@ -1,8 +1,17 @@
 #pragma once
 
+#include "config.h"
+#include "window_manager.h"
+
 #include <string>
 #include <memory>
 #include <iostream>
+
+#define WINDOW_MANAGER        EshyWM::get_window_manager()
+#define CONFIG                EshyWM::get_current_config()
+#define DISPLAY               EshyWM::get_window_manager()->get_display()
+#define ROOT                  EshyWM::get_window_manager()->get_root()
+#define IS_TILING_MODE()      EshyWM::get_window_manager()->get_manager_data()->b_tiling_mode
 
 class EshyWM
 {
@@ -18,7 +27,7 @@ public:
     void update_config();
     void run_startup_commands();
 
-    void on_screen_resolution_changed();
+    void on_screen_resolution_changed(uint new_width, uint new_height);
 
     void update_background(std::string background_path = std::string());
 

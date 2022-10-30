@@ -7,22 +7,17 @@ extern "C" {
 #include "window.h"
 #include "config.h"
 #include "eshywm.h"
+#include "button.h"
 
 #include <glog/logging.h>
 
 #include <algorithm>
 
-
-EshyWMWindow::EshyWMWindow(Window _window) : window(_window)
-{
-}
-
-
 void EshyWMWindow::frame_window(bool b_was_created_before_window_manager)
 {
     //Retrieve attributes of window to frame
     XWindowAttributes x_window_attributes = {0};
-    CHECK(XGetWindowAttributes(EshyWM::get_window_manager()->get_display(), window, &x_window_attributes));
+    XGetWindowAttributes(EshyWM::get_window_manager()->get_display(), window, &x_window_attributes);
 
     //If window was created before window manager started, we should frame it only if it is visible and does not set override_redirect
     if(b_was_created_before_window_manager && (x_window_attributes.override_redirect || x_window_attributes.map_state != IsViewable))
@@ -30,29 +25,28 @@ void EshyWMWindow::frame_window(bool b_was_created_before_window_manager)
         return;
     }
 
-    static Display* display = EshyWM::get_window_manager()->get_display();
-    static const Window root = EshyWM::get_window_manager()->get_root();
+    XSelectInput(DISPLAY, window, PropertyChangeMask);
 
     //Create frame and titlebar
     frame = XCreateSimpleWindow(
-        display,
-        root,
+        DISPLAY,
+        ROOT,
         x_window_attributes.x,
         x_window_attributes.y,
         x_window_attributes.width,
-        x_window_attributes.height + (EshyWM::get_window_manager()->get_manager_data()->b_tiling_mode ? 0 : EshyWM::get_current_config()->titlebar_height),
-        EshyWM::get_current_config()->window_frame_border_width,
-        EshyWM::get_current_config()->window_frame_border_color,
-        EshyWM::get_current_config()->window_background_color
+        x_window_attributes.height + (IS_TILING_MODE() ? 0 : CONFIG->titlebar_height),
+        CONFIG->window_frame_border_width,
+        CONFIG->window_frame_border_color,
+        CONFIG->window_background_color
     );
-    XReparentWindow(display, window, frame, 0, EshyWM::get_window_manager()->get_manager_data()->b_tiling_mode ? 0 : EshyWM::get_current_config()->titlebar_height);
-    XMapWindow(display, frame);
+    XReparentWindow(DISPLAY, window, frame, 0, IS_TILING_MODE() ? 0 : CONFIG->titlebar_height);
+    XMapWindow(DISPLAY, frame);
 
-    if(!EshyWM::get_window_manager()->get_manager_data()->b_tiling_mode)
+    if(!IS_TILING_MODE())
     {
         titlebar = XCreateSimpleWindow(
-            display,
-            root,
+            DISPLAY,
+            ROOT,
             x_window_attributes.x,
             x_window_attributes.y,
             x_window_attributes.width,
@@ -61,29 +55,33 @@ void EshyWMWindow::frame_window(bool b_was_created_before_window_manager)
             EshyWM::get_current_config()->window_frame_border_color,
             EshyWM::get_current_config()->window_background_color
         );
-        XSelectInput(display, titlebar, SubstructureRedirectMask | SubstructureNotifyMask);
-        XReparentWindow(display, titlebar, frame, 0, 0);
-        XMapWindow(display, titlebar);
+        XSelectInput(DISPLAY, titlebar, SubstructureRedirectMask | SubstructureNotifyMask);
+        XReparentWindow(DISPLAY, titlebar, frame, 0, 0);
+        XMapWindow(DISPLAY, titlebar);
     }
 
-    graphics_context_internal = XCreateGC(EshyWM::get_window_manager()->get_display(), frame, 0, 0);
-    draw_titlebar_buttons();
+    graphics_context_internal = XCreateGC(DISPLAY, frame, 0, 0);
+    const rect initial_size = {0, 0, CONFIG->titlebar_button_size, CONFIG->titlebar_button_size};
+    minimize_button = std::make_shared<Button>(titlebar, graphics_context_internal, initial_size, CONFIG->titlebar_button_normal_color, CONFIG->titlebar_button_hovered_color, CONFIG->titlebar_button_pressed_color);
+    maximize_button = std::make_shared<Button>(titlebar, graphics_context_internal, initial_size, CONFIG->titlebar_button_normal_color, CONFIG->titlebar_button_hovered_color, CONFIG->titlebar_button_pressed_color);
+    close_button = std::make_shared<Button>(titlebar, graphics_context_internal, initial_size, CONFIG->titlebar_button_normal_color, CONFIG->titlebar_button_hovered_color, CONFIG->titlebar_button_pressed_color);
+    draw_titlebar();
 }
 
 void EshyWMWindow::unframe_window()
 {
     if(frame)
     {
-        XUnmapWindow(EshyWM::get_window_manager()->get_display(), frame);
-        XReparentWindow(EshyWM::get_window_manager()->get_display(), window, EshyWM::get_window_manager()->get_root(), 0, 0);
-        XRemoveFromSaveSet(EshyWM::get_window_manager()->get_display(), window);
-        XDestroyWindow(EshyWM::get_window_manager()->get_display(), frame);
+        XUnmapWindow(DISPLAY, frame);
+        XReparentWindow(DISPLAY, window, ROOT, 0, 0);
+        XRemoveFromSaveSet(DISPLAY, window);
+        XDestroyWindow(DISPLAY, frame);
     }
 
-    if(!EshyWM::get_window_manager()->get_manager_data()->b_tiling_mode && titlebar)
+    if(!IS_TILING_MODE() && titlebar)
     {
-        XUnmapWindow(EshyWM::get_window_manager()->get_display(), titlebar);
-        XDestroyWindow(EshyWM::get_window_manager()->get_display(), titlebar);
+        XUnmapWindow(DISPLAY, titlebar);
+        XDestroyWindow(DISPLAY, titlebar);
     }
 }
 
@@ -91,7 +89,7 @@ void EshyWMWindow::setup_grab_events(bool b_was_created_before_window_manager)
 {
     //Retrieve attributes of window to frame
     XWindowAttributes x_window_attributes = {0};
-    CHECK(XGetWindowAttributes(EshyWM::get_window_manager()->get_display(), window, &x_window_attributes));
+    XGetWindowAttributes(EshyWM::get_window_manager()->get_display(), window, &x_window_attributes);
 
     //If window was created before window manager started, we should frame it only if it is visible and does not set override_redirect
     if(b_was_created_before_window_manager && (x_window_attributes.override_redirect || x_window_attributes.map_state != IsViewable))
@@ -100,101 +98,85 @@ void EshyWMWindow::setup_grab_events(bool b_was_created_before_window_manager)
     }
 
     //Basic movement and resizing
-    XGrabButton(EshyWM::get_window_manager()->get_display(), Button1, 0, frame, false, ButtonPressMask, GrabModeSync, GrabModeAsync, None, None);
-    XGrabButton(EshyWM::get_window_manager()->get_display(), Button1, Mod1Mask, frame, false, ButtonPressMask | ButtonMotionMask, GrabModeAsync, GrabModeAsync, None, None);
-    XGrabButton(EshyWM::get_window_manager()->get_display(), Button3, Mod1Mask, frame, false, ButtonPressMask | ButtonMotionMask, GrabModeAsync, GrabModeAsync, None, None);
+    XGrabButton(DISPLAY, Button1, 0, frame, false, ButtonPressMask, GrabModeSync, GrabModeAsync, None, None);
+    XGrabButton(DISPLAY, Button1, Mod1Mask, frame, false, ButtonPressMask | ButtonReleaseMask | ButtonMotionMask, GrabModeAsync, GrabModeAsync, None, None);
+    XGrabButton(DISPLAY, Button3, Mod1Mask, frame, false, ButtonPressMask | ButtonReleaseMask | ButtonMotionMask, GrabModeAsync, GrabModeAsync, None, None);
 
-    if(!EshyWM::get_window_manager()->get_manager_data()->b_tiling_mode)
+    if(!IS_TILING_MODE())
     {
-        XGrabButton(EshyWM::get_window_manager()->get_display(), Button1, 0, titlebar, false, ButtonPressMask | ButtonMotionMask, GrabModeAsync, GrabModeAsync, None, None);
-        XGrabButton(EshyWM::get_window_manager()->get_display(), Button3, 0, titlebar, false, ButtonPressMask | ButtonMotionMask, GrabModeAsync, GrabModeAsync, None, None);
+        XGrabButton(DISPLAY, Button1, 0, titlebar, false, ButtonPressMask | ButtonReleaseMask | ButtonMotionMask, GrabModeAsync, GrabModeAsync, None, None);
     }
 
     //Kill windows with alt + shift + c
-    XGrabKey(EshyWM::get_window_manager()->get_display(), XKeysymToKeycode(EshyWM::get_window_manager()->get_display(), XK_C), Mod1Mask, frame, false, GrabModeAsync, GrabModeAsync);
-    //Switch windows with alt + tab
-    XGrabKey(EshyWM::get_window_manager()->get_display(), XKeysymToKeycode(EshyWM::get_window_manager()->get_display(), XK_Tab), Mod1Mask, frame, false, GrabModeAsync, GrabModeAsync);
+    XGrabKey(DISPLAY, XKeysymToKeycode(DISPLAY, XK_C), Mod1Mask, frame, false, GrabModeAsync, GrabModeAsync);
 
-    //Resize windows with alt + arrow keys
-    XGrabKey(EshyWM::get_window_manager()->get_display(), XKeysymToKeycode(EshyWM::get_window_manager()->get_display(), XK_Left), Mod1Mask, frame, false, GrabModeAsync, GrabModeAsync);
-    XGrabKey(EshyWM::get_window_manager()->get_display(), XKeysymToKeycode(EshyWM::get_window_manager()->get_display(), XK_Right), Mod1Mask, frame, false, GrabModeAsync, GrabModeAsync);
-    XGrabKey(EshyWM::get_window_manager()->get_display(), XKeysymToKeycode(EshyWM::get_window_manager()->get_display(), XK_Up), Mod1Mask, frame, false, GrabModeAsync, GrabModeAsync);
-    XGrabKey(EshyWM::get_window_manager()->get_display(), XKeysymToKeycode(EshyWM::get_window_manager()->get_display(), XK_Down), Mod1Mask, frame, false, GrabModeAsync, GrabModeAsync);
+    //Resize windows with alt + arrow keys. Move windows with alt + shift + arrow keys
+    XGrabKey(DISPLAY, XKeysymToKeycode(DISPLAY, XK_Left), Mod1Mask | ControlMask, frame, false, GrabModeAsync, GrabModeAsync);
+    XGrabKey(DISPLAY, XKeysymToKeycode(DISPLAY, XK_Right), Mod1Mask | ControlMask, frame, false, GrabModeAsync, GrabModeAsync);
+    XGrabKey(DISPLAY, XKeysymToKeycode(DISPLAY, XK_Up), Mod1Mask | ControlMask, frame, false, GrabModeAsync, GrabModeAsync);
+    XGrabKey(DISPLAY, XKeysymToKeycode(DISPLAY, XK_Down), Mod1Mask | ControlMask, frame, false, GrabModeAsync, GrabModeAsync);
 
-    //Move windows with alt + shift + arrow keys
-    XGrabKey(EshyWM::get_window_manager()->get_display(), XKeysymToKeycode(EshyWM::get_window_manager()->get_display(), XK_Left), Mod1Mask | ControlMask, frame, false, GrabModeAsync, GrabModeAsync);
-    XGrabKey(EshyWM::get_window_manager()->get_display(), XKeysymToKeycode(EshyWM::get_window_manager()->get_display(), XK_Right), Mod1Mask | ControlMask, frame, false, GrabModeAsync, GrabModeAsync);
-    XGrabKey(EshyWM::get_window_manager()->get_display(), XKeysymToKeycode(EshyWM::get_window_manager()->get_display(), XK_Up), Mod1Mask | ControlMask, frame, false, GrabModeAsync, GrabModeAsync);
-    XGrabKey(EshyWM::get_window_manager()->get_display(), XKeysymToKeycode(EshyWM::get_window_manager()->get_display(), XK_Down), Mod1Mask | ControlMask, frame, false, GrabModeAsync, GrabModeAsync);
+    //Basic functions
+    XGrabKey(DISPLAY, XKeysymToKeycode(DISPLAY, XK_f | XK_F), Mod1Mask, frame, false, GrabModeAsync, GrabModeAsync);
+    XGrabKey(DISPLAY, XKeysymToKeycode(DISPLAY, XK_a | XK_A), Mod1Mask, frame, false, GrabModeAsync, GrabModeAsync);
 }
 
 void EshyWMWindow::remove_grab_events()
 {
     //Basic movement and resizing
-    XUngrabButton(EshyWM::get_window_manager()->get_display(), Button1, 0, frame);
-    XUngrabButton(EshyWM::get_window_manager()->get_display(), Button1, Mod1Mask, frame);
-    XUngrabButton(EshyWM::get_window_manager()->get_display(), Button3, Mod1Mask, frame);
-    XUngrabButton(EshyWM::get_window_manager()->get_display(), Button1, 0, titlebar);
-    XUngrabButton(EshyWM::get_window_manager()->get_display(), Button3, 0, titlebar);
+    XUngrabButton(DISPLAY, Button1, 0, frame);
+    XUngrabButton(DISPLAY, Button1, Mod1Mask, frame);
+    XUngrabButton(DISPLAY, Button3, Mod1Mask, frame);
+    XUngrabButton(DISPLAY, Button1, 0, titlebar);
 
     //Kill windows with alt + shift + c
-    XUngrabButton(EshyWM::get_window_manager()->get_display(), XKeysymToKeycode(EshyWM::get_window_manager()->get_display(), XK_C), Mod1Mask, frame);
-    //Switch windows with alt + tab
-    XUngrabButton(EshyWM::get_window_manager()->get_display(), XKeysymToKeycode(EshyWM::get_window_manager()->get_display(), XK_Tab), Mod1Mask, frame);
+    XUngrabButton(DISPLAY, XKeysymToKeycode(DISPLAY, XK_C), Mod1Mask, frame);
 
-    //Resize windows with alt + arrow keys
-    XUngrabButton(EshyWM::get_window_manager()->get_display(), XKeysymToKeycode(EshyWM::get_window_manager()->get_display(), XK_Left), Mod1Mask, frame);
-    XUngrabButton(EshyWM::get_window_manager()->get_display(), XKeysymToKeycode(EshyWM::get_window_manager()->get_display(), XK_Right), Mod1Mask, frame);
-    XUngrabButton(EshyWM::get_window_manager()->get_display(), XKeysymToKeycode(EshyWM::get_window_manager()->get_display(), XK_Up), Mod1Mask, frame);
-    XUngrabButton(EshyWM::get_window_manager()->get_display(), XKeysymToKeycode(EshyWM::get_window_manager()->get_display(), XK_Down), Mod1Mask, frame);
+    //Resize windows with alt + arrow keys. Move windows with alt + shift + arrow keys
+    XUngrabButton(DISPLAY, XKeysymToKeycode(DISPLAY, XK_Left), Mod1Mask | ControlMask, frame);
+    XUngrabButton(DISPLAY, XKeysymToKeycode(DISPLAY, XK_Right), Mod1Mask | ControlMask, frame);
+    XUngrabButton(DISPLAY, XKeysymToKeycode(DISPLAY, XK_Up), Mod1Mask | ControlMask, frame);
+    XUngrabButton(DISPLAY, XKeysymToKeycode(DISPLAY, XK_Down), Mod1Mask | ControlMask, frame);
 
-    //Move windows with alt + shift + arrow keys
-    XUngrabButton(EshyWM::get_window_manager()->get_display(), XKeysymToKeycode(EshyWM::get_window_manager()->get_display(), XK_Left), Mod1Mask | ControlMask, frame);
-    XUngrabButton(EshyWM::get_window_manager()->get_display(), XKeysymToKeycode(EshyWM::get_window_manager()->get_display(), XK_Right), Mod1Mask | ControlMask, frame);
-    XUngrabButton(EshyWM::get_window_manager()->get_display(), XKeysymToKeycode(EshyWM::get_window_manager()->get_display(), XK_Up), Mod1Mask | ControlMask, frame);
-    XUngrabButton(EshyWM::get_window_manager()->get_display(), XKeysymToKeycode(EshyWM::get_window_manager()->get_display(), XK_Down), Mod1Mask | ControlMask, frame);
+    //Basic functions
+    XUngrabButton(DISPLAY, XKeysymToKeycode(DISPLAY, XK_f | XK_F), Mod1Mask, frame);
+    XUngrabButton(DISPLAY, XKeysymToKeycode(DISPLAY, XK_a | XK_A), Mod1Mask, frame);
 }
 
-void EshyWMWindow::draw_titlebar_buttons()
+void EshyWMWindow::minimize_window()
 {
-    if(EshyWM::get_window_manager()->get_manager_data()->b_tiling_mode)
+    if(!b_is_minimized)
     {
-        return;
+        XUnmapWindow(WINDOW_MANAGER->get_display(), frame);
+    }
+    else
+    {
+        XMapWindow(WINDOW_MANAGER->get_display(), frame);
     }
 
-    //Retrieve attributes of window to frame
-    XWindowAttributes x_window_attributes = {0};
-    XGetWindowAttributes(EshyWM::get_window_manager()->get_display(), window, &x_window_attributes);
+    b_is_minimized = !b_is_minimized;
+}
 
-    XClearWindow(EshyWM::get_window_manager()->get_display(), titlebar);
-    XSetForeground(EshyWM::get_window_manager()->get_display(), graphics_context_internal, EshyWM::get_current_config()->titlebar_button_color);
-    XFillRectangle(
-        EshyWM::get_window_manager()->get_display(),
-        titlebar,
-        graphics_context_internal,
-        x_window_attributes.width - EshyWM::get_current_config()->titlebar_button_size,
-        0,
-        EshyWM::get_current_config()->titlebar_button_size,
-        EshyWM::get_current_config()->titlebar_button_size
-    );
-    XFillRectangle(
-        EshyWM::get_window_manager()->get_display(),
-        titlebar,
-        graphics_context_internal,
-        (x_window_attributes.width - EshyWM::get_current_config()->titlebar_button_size * 2) - EshyWM::get_current_config()->titlebar_button_padding,
-        0,
-        EshyWM::get_current_config()->titlebar_button_size,
-        EshyWM::get_current_config()->titlebar_button_size
-    );
-    XFillRectangle(
-        EshyWM::get_window_manager()->get_display(),
-        titlebar,
-        graphics_context_internal,
-        (x_window_attributes.width - EshyWM::get_current_config()->titlebar_button_size * 3) - (EshyWM::get_current_config()->titlebar_button_padding * 2),
-        0,
-        EshyWM::get_current_config()->titlebar_button_size,
-        EshyWM::get_current_config()->titlebar_button_size
-    );
+void EshyWMWindow::maximize_window(bool b_from_move_or_resize)
+{
+    if(!b_is_maximized)
+    {
+        recalculate_all_window_size_and_location();
+        pre_minimize_and_maximize_saved_size_and_location_data = get_frame_size_and_location_data();
+        move_window_absolute(0, 0);
+        resize_window_absolute(WINDOW_MANAGER->get_display_width() - (CONFIG->window_frame_border_width * 2), WINDOW_MANAGER->get_display_height() - (CONFIG->window_frame_border_width * 2));
+    }
+    else
+    {
+        if(!b_from_move_or_resize)
+        {
+            move_window_absolute(pre_minimize_and_maximize_saved_size_and_location_data.x, pre_minimize_and_maximize_saved_size_and_location_data.y);
+        }
+
+        resize_window_absolute(pre_minimize_and_maximize_saved_size_and_location_data.width, pre_minimize_and_maximize_saved_size_and_location_data.height);
+    }
+
+    b_is_maximized = !b_is_maximized;
 }
 
 void EshyWMWindow::close_window()
@@ -205,107 +187,79 @@ void EshyWMWindow::close_window()
     Atom* supported_protocols;
     int num_supported_protocols;
 
-    if (XGetWMProtocols(EshyWM::get_window_manager()->get_display(), window, &supported_protocols, &num_supported_protocols) && (std::find(supported_protocols, supported_protocols + num_supported_protocols, EshyWM::get_window_manager()->get_atom_wm_delete_window()) != supported_protocols + num_supported_protocols))
+    if (XGetWMProtocols(DISPLAY, window, &supported_protocols, &num_supported_protocols) && (std::find(supported_protocols, supported_protocols + num_supported_protocols, EshyWM::get_window_manager()->get_atom_wm_delete_window()) != supported_protocols + num_supported_protocols))
     {
         LOG(INFO) << "Gracefully deleting window " << window;
-
-        //Construct message
         XEvent message;
         memset(&message, 0, sizeof(message));
         message.xclient.type = ClientMessage;
-        message.xclient.message_type = EshyWM::get_window_manager()->get_atom_wm_protocols();
+        message.xclient.message_type = WINDOW_MANAGER->get_atom_wm_protocols();
         message.xclient.window = window;
         message.xclient.format = 32;
-        message.xclient.data.l[0] = EshyWM::get_window_manager()->get_atom_wm_delete_window();
-
-        //Send message to window to be closed
-        CHECK(XSendEvent(EshyWM::get_window_manager()->get_display(), window, false, 0 , &message));
+        message.xclient.data.l[0] = WINDOW_MANAGER->get_atom_wm_delete_window();
+        XSendEvent(DISPLAY, window, false, 0 , &message);
     }
     else
     {
         LOG(INFO) << "Killing window " << window;
-        XKillClient(EshyWM::get_window_manager()->get_display(), window);
+        XKillClient(DISPLAY, window);
     }
 }
 
 
-int EshyWMWindow::is_cursor_on_titlebar_buttons(Window window, int cursor_x, int cursor_y)
+void EshyWMWindow::move_window(int delta_x, int delta_y)
 {
-    if(EshyWM::get_window_manager()->get_manager_data()->b_tiling_mode || window != titlebar)
+    if(b_is_maximized)
     {
-        return 0;
+        maximize_window(true);
     }
 
-    //Retrieve attributes of window to frame
-    XWindowAttributes x_window_attributes = {0};
-    CHECK(XGetWindowAttributes(EshyWM::get_window_manager()->get_display(), window, &x_window_attributes));
-
-    if(cursor_y > 0 && cursor_y < EshyWM::get_current_config()->titlebar_height)
+    if(!b_is_currently_moving_or_resizing)
     {
-        if(cursor_x < x_window_attributes.width && cursor_x > x_window_attributes.width - EshyWM::get_current_config()->titlebar_button_size)
-        {
-            return 3;
-        }
-        else if(cursor_x < x_window_attributes.width - EshyWM::get_current_config()->titlebar_button_size - EshyWM::get_current_config()->titlebar_button_padding && cursor_x > x_window_attributes.width - (EshyWM::get_current_config()->titlebar_button_size * 2) - EshyWM::get_current_config()->titlebar_button_padding)
-        {
-            return 2;
-        }
-        else if(cursor_x < x_window_attributes.width - (EshyWM::get_current_config()->titlebar_button_size * 2) - (EshyWM::get_current_config()->titlebar_button_padding * 2) && cursor_x > x_window_attributes.width - (EshyWM::get_current_config()->titlebar_button_size * 3) - (EshyWM::get_current_config()->titlebar_button_padding * 2))
-        {
-            return 1;
-        }
+        b_is_currently_moving_or_resizing = true;
+        temp_move_and_resize_size_and_location_data = get_frame_size_and_location_data();
     }
 
-    return 0;
+    move_window_absolute(temp_move_and_resize_size_and_location_data.x + delta_x, temp_move_and_resize_size_and_location_data.y + delta_y);
 }
 
-
-void EshyWMWindow::resize_window(Vector2D<int> delta)
+void EshyWMWindow::move_window_absolute(int new_position_x, int new_position_y)
 {
-    const rect data = get_frame_size_and_location_data();
-    const Vector2D<int> size_delta(std::max(delta.x, -(int)data.width), std::max(delta.y, -(int)data.height));
-    const Vector2D<int> final_frame_size = Vector2D<int>(data.width, data.height) + size_delta;
+    XMoveWindow(DISPLAY, frame, new_position_x, new_position_y);
+}
 
-    XResizeWindow(EshyWM::get_window_manager()->get_display(), frame, final_frame_size.x, final_frame_size.y);
-    if(!EshyWM::get_window_manager()->get_manager_data()->b_tiling_mode)
+void EshyWMWindow::resize_window(int delta_x, int delta_y)
+{
+    if(b_is_maximized)
     {
-        XResizeWindow(EshyWM::get_window_manager()->get_display(), titlebar, final_frame_size.x, EshyWM::get_current_config()->titlebar_height);
+        maximize_window(true);
     }
-    XResizeWindow(EshyWM::get_window_manager()->get_display(), window, final_frame_size.x, final_frame_size.y - (EshyWM::get_window_manager()->get_manager_data()->b_tiling_mode ? 0 : EshyWM::get_current_config()->titlebar_height));
-}
 
-void EshyWMWindow::resize_window_absolute(Vector2D<int> new_size)
-{
-    XResizeWindow(EshyWM::get_window_manager()->get_display(), frame, new_size.x, new_size.y);
-    if(!EshyWM::get_window_manager()->get_manager_data()->b_tiling_mode)
+    if(!b_is_currently_moving_or_resizing)
     {
-        XResizeWindow(EshyWM::get_window_manager()->get_display(), titlebar, new_size.x, EshyWM::get_current_config()->titlebar_height);
+        b_is_currently_moving_or_resizing = true;
+        temp_move_and_resize_size_and_location_data = get_frame_size_and_location_data();
     }
-    XResizeWindow(EshyWM::get_window_manager()->get_display(), window, new_size.x, new_size.y - (EshyWM::get_window_manager()->get_manager_data()->b_tiling_mode ? 0 : EshyWM::get_current_config()->titlebar_height));
+
+    const Vector2D<uint> size_delta(std::max(delta_x, -(int)temp_move_and_resize_size_and_location_data.width), std::max(delta_y, -(int)temp_move_and_resize_size_and_location_data.height));
+    const Vector2D<uint> final_frame_size = Vector2D<uint>(temp_move_and_resize_size_and_location_data.width, temp_move_and_resize_size_and_location_data.height) + size_delta;
+    resize_window_absolute(final_frame_size);
 }
 
-void EshyWMWindow::resize_window_horizontal_left_arrow()
+void EshyWMWindow::resize_window_absolute(uint new_size_x, uint new_size_y)
 {
-    //set_preferred_size(Vector2D<int>(get_preferred_size().x + get_resize_step_horizontal(), get_preferred_size().y));
-    //EshyWM::get_window_manager()->window_size_updated(this);
+    XResizeWindow(DISPLAY, frame, new_size_x, new_size_y);
+    if(!IS_TILING_MODE())
+    {
+        XResizeWindow(DISPLAY, titlebar, new_size_x, EshyWM::get_current_config()->titlebar_height);
+    }
+    XResizeWindow(DISPLAY, window, new_size_x, new_size_y - (IS_TILING_MODE() ? 0 : CONFIG->titlebar_height));
 }
 
-void EshyWMWindow::resize_window_horizontal_right_arrow()
+void EshyWMWindow::motion_modify_ended()
 {
-    //set_preferred_size(Vector2D<int>(get_preferred_size().x - get_resize_step_horizontal(), get_preferred_size().y));
-    //EshyWM::get_window_manager()->window_size_updated(this);
+    b_is_currently_moving_or_resizing = false;
 }
-
-void EshyWMWindow::resize_window_vertical_up_arrow()
-{
-
-}
-
-void EshyWMWindow::resize_window_vertical_down_arrow()
-{
-
-}
-
 
 void EshyWMWindow::recalculate_all_window_size_and_location()
 {
@@ -316,23 +270,67 @@ void EshyWMWindow::recalculate_all_window_size_and_location()
     unsigned int width;
     unsigned int height;
 
-    XGetGeometry(EshyWM::get_window_manager()->get_display(), frame, &return_window, &x, &y, &width, &height, &unsigned_null, &unsigned_null);
+    XGetGeometry(DISPLAY, frame, &return_window, &x, &y, &width, &height, &unsigned_null, &unsigned_null);
     frame_size_and_location_data = rect(x, y, width, height);
-    if(!EshyWM::get_window_manager()->get_manager_data()->b_tiling_mode)
+    if(!IS_TILING_MODE())
     {
-        XGetGeometry(EshyWM::get_window_manager()->get_display(), titlebar, &return_window, &x, &y, &width, &height, &unsigned_null, &unsigned_null);
+        XGetGeometry(DISPLAY, titlebar, &return_window, &x, &y, &width, &height, &unsigned_null, &unsigned_null);
         titlebar_size_and_location_data = rect(x, y, width, height);
     }
-    XGetGeometry(EshyWM::get_window_manager()->get_display(), window, &return_window, &x, &y, &width, &height, &unsigned_null, &unsigned_null);
+    XGetGeometry(DISPLAY, window, &return_window, &x, &y, &width, &height, &unsigned_null, &unsigned_null);
     window_size_and_location_data = rect(x, y, width, height);
 }
 
-int EshyWMWindow::get_resize_step_horizontal() const
+
+void EshyWMWindow::draw_titlebar()
 {
-    return EshyWM::get_current_config()->resize_step_size_width;
+    if(IS_TILING_MODE())
+    {
+        return;
+    }
+
+    //Retrieve attributes of window to frame
+    XWindowAttributes x_window_attributes = {0};
+    XGetWindowAttributes(DISPLAY, window, &x_window_attributes);
+
+    XClearWindow(DISPLAY, titlebar);
+
+    const int button_y_offset = (CONFIG->titlebar_height - CONFIG->titlebar_button_size) / 2;
+    const auto calc_x = [x_window_attributes, button_y_offset](int i)
+    {
+        return (x_window_attributes.width - CONFIG->titlebar_button_size * i) - (CONFIG->titlebar_button_padding * (i - 1)) - button_y_offset;
+    };
+
+    //Draw buttons
+    minimize_button->draw(calc_x(3), button_y_offset);
+    maximize_button->draw(calc_x(2), button_y_offset);
+    close_button->draw(calc_x(1), button_y_offset);
+    
+    XTextProperty name;
+    XGetWMName(DISPLAY, window, &name);
+    
+    //Draw title
+    XSetForeground(DISPLAY, graphics_context_internal, EshyWM::get_current_config()->titlebar_title_color);
+    XDrawString(DISPLAY, titlebar, graphics_context_internal, 10, 13, static_cast<char*>(static_cast<void*>(name.value)), name.nitems);
 }
 
-int EshyWMWindow::get_resize_step_vertical() const
+int EshyWMWindow::is_cursor_on_titlebar_buttons(Window window, int cursor_x, int cursor_y)
 {
-    return EshyWM::get_current_config()->resize_step_size_height;
+    if(IS_TILING_MODE() || window != titlebar)
+    {
+        return 0;
+    }
+
+    //Retrieve attributes of window to frame
+    XWindowAttributes x_window_attributes = {0};
+    XGetWindowAttributes(DISPLAY, window, &x_window_attributes);
+
+    if(minimize_button->is_hovered(cursor_x, cursor_y))
+    return 1;
+    else if(maximize_button->is_hovered(cursor_x, cursor_y))
+    return 2;
+    else if(close_button->is_hovered(cursor_x, cursor_y))
+    return 3;
+
+    return 0;
 }

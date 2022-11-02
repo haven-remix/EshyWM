@@ -7,23 +7,23 @@
 
 void EshyWMTaskbar::initialize_taskbar()
 {
-    const unsigned int height = DisplayHeight(EshyWM::get_window_manager()->get_display(), DefaultScreen(EshyWM::get_window_manager()->get_display()));
+    const unsigned int height = DisplayHeight(DISPLAY, DefaultScreen(DISPLAY));
     taskbar = XCreateSimpleWindow(
-        EshyWM::get_window_manager()->get_display(),
-        EshyWM::get_window_manager()->get_root(),
+        DISPLAY,
+        ROOT,
         0,
-        height - EshyWM::get_current_config()->taskbar_height,
-        EshyWM::get_window_manager()->get_display_width(),
-        EshyWM::get_current_config()->taskbar_height,
+        height - CONFIG->taskbar_height,
+        WINDOW_MANAGER->get_display_width(),
+        CONFIG->taskbar_height,
         0,
         0,
-        EshyWM::get_current_config()->taskbar_color
+        CONFIG->taskbar_color
     );
-    XSelectInput(EshyWM::get_window_manager()->get_display(), taskbar, SubstructureRedirectMask | SubstructureNotifyMask | VisibilityChangeMask);
-    XGrabButton(EshyWM::get_window_manager()->get_display(), Button1, 0, taskbar, false, ButtonPressMask | ButtonReleaseMask, GrabModeSync, GrabModeAsync, None, None);
-    XMapWindow(EshyWM::get_window_manager()->get_display(), taskbar);
+    XSelectInput(DISPLAY, taskbar, SubstructureRedirectMask | SubstructureNotifyMask | VisibilityChangeMask);
+    XGrabButton(DISPLAY, Button1, 0, taskbar, false, ButtonPressMask | ButtonReleaseMask, GrabModeSync, GrabModeAsync, None, None);
+    XMapWindow(DISPLAY, taskbar);
 
-    graphics_context_internal = XCreateGC(EshyWM::get_window_manager()->get_display(), taskbar, 0, 0);
+    graphics_context_internal = XCreateGC(DISPLAY, taskbar, 0, 0);
 }
 
 void EshyWMTaskbar::update_taskbar_size(uint width, uint height)
@@ -34,7 +34,7 @@ void EshyWMTaskbar::update_taskbar_size(uint width, uint height)
 
 void EshyWMTaskbar::raise_taskbar()
 {
-    XRaiseWindow(EshyWM::get_window_manager()->get_display(), taskbar);
+    XRaiseWindow(DISPLAY, taskbar);
 }
 
 void EshyWMTaskbar::draw_taskbar()

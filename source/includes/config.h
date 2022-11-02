@@ -17,20 +17,25 @@ public:
     int resize_step_size_width;
     int resize_step_size_height;
 
-    unsigned int window_frame_border_width;
+    uint window_frame_border_width;
     unsigned long window_frame_border_color;
     unsigned long window_background_color;
 
     int titlebar_height;
-    unsigned int titlebar_button_size;
-    unsigned int titlebar_button_padding;
+    uint titlebar_button_size;
+    uint titlebar_button_padding;
     unsigned long titlebar_button_normal_color;
     unsigned long titlebar_button_hovered_color;
     unsigned long titlebar_button_pressed_color;
     unsigned long titlebar_title_color;
 
-    unsigned int taskbar_height;
+    uint taskbar_height;
     unsigned long taskbar_color;
+
+    uint switcher_width;
+    uint switcher_height;
+    uint switcher_button_height;
+    unsigned long switcher_color;
 
     Time double_click_time;
 
@@ -60,6 +65,11 @@ public:
 
         taskbar_height = 30;
         taskbar_color = 0x283140;
+
+        switcher_width = 300;
+        switcher_height = 500;
+        switcher_button_height = 30;
+        switcher_color = 0xaeb3bd;
 
         double_click_time = 500;
 

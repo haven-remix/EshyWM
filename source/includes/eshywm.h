@@ -13,6 +13,9 @@
 #define ROOT                  EshyWM::get_window_manager()->get_root()
 #define IS_TILING_MODE()      EshyWM::get_window_manager()->get_manager_data()->b_tiling_mode
 
+#define PRIMARY_MOD_KEY       Mod1Mask | ShiftMask
+#define SECONDARY_MOD_KEY     Mod4Mask
+
 class EshyWM
 {
 public:

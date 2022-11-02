@@ -32,6 +32,12 @@ struct window_manager_data
     {}
 };
 
+struct double_click_data
+{
+    Window first_click_window;
+    Time first_click_time;
+};
+
 class WindowManager
 {
 public:
@@ -63,7 +69,10 @@ private:
     const Atom WM_DELETE_WINDOW;
     std::shared_ptr<class container> root_container;
     std::shared_ptr<class EshyWMTaskbar> taskbar;
+    std::shared_ptr<class EshyWMSwitcher> switcher;
     window_manager_data* manager_data;
+
+    std::vector<Window> override_redirected_windows;
 
     uint display_width;
     uint display_height;
@@ -71,12 +80,12 @@ private:
     organized_container_map_t frame_list;
     organized_container_map_t titlebar_list;
 
-    Window first_click_window;
-    Time first_click_time;
+    double_click_data titlebar_double_click;
 
     void main_loop();
 
     /**Event handlers*/
+    void OnCreateNotify(const XCreateWindowEvent& event);
     void OnUnmapNotify(const XUnmapEvent& event);
     void OnConfigureNotify(const XConfigureEvent& event);
     void OnMapRequest(const XMapRequestEvent& event);

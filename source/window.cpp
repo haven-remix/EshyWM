@@ -98,27 +98,27 @@ void EshyWMWindow::setup_grab_events(bool b_was_created_before_window_manager)
     }
 
     //Basic movement and resizing
-    XGrabButton(DISPLAY, Button1, 0, frame, false, ButtonPressMask, GrabModeSync, GrabModeAsync, None, None);
-    XGrabButton(DISPLAY, Button1, Mod1Mask, frame, false, ButtonPressMask | ButtonReleaseMask | ButtonMotionMask, GrabModeAsync, GrabModeAsync, None, None);
-    XGrabButton(DISPLAY, Button3, Mod1Mask, frame, false, ButtonPressMask | ButtonReleaseMask | ButtonMotionMask, GrabModeAsync, GrabModeAsync, None, None);
+    XGrabButton(DISPLAY, Button1, AnyModifier, frame, false, ButtonPressMask, GrabModeSync, GrabModeAsync, None, None);
+    XGrabButton(DISPLAY, Button1, PRIMARY_MOD_KEY, frame, false, ButtonPressMask | ButtonReleaseMask | ButtonMotionMask, GrabModeAsync, GrabModeAsync, None, None);
+    XGrabButton(DISPLAY, Button3, PRIMARY_MOD_KEY, frame, false, ButtonReleaseMask | ButtonMotionMask, GrabModeAsync, GrabModeAsync, None, None);
 
     if(!IS_TILING_MODE())
     {
-        XGrabButton(DISPLAY, Button1, 0, titlebar, false, ButtonPressMask | ButtonReleaseMask | ButtonMotionMask, GrabModeAsync, GrabModeAsync, None, None);
+        XGrabButton(DISPLAY, Button1, AnyModifier, titlebar, false, ButtonPressMask | ButtonReleaseMask | ButtonMotionMask, GrabModeAsync, GrabModeAsync, titlebar, None);
     }
 
     //Kill windows with alt + shift + c
-    XGrabKey(DISPLAY, XKeysymToKeycode(DISPLAY, XK_C), Mod1Mask, frame, false, GrabModeAsync, GrabModeAsync);
+    XGrabKey(DISPLAY, XKeysymToKeycode(DISPLAY, XK_C), AnyModifier, frame, false, GrabModeAsync, GrabModeSync);
 
     //Resize windows with alt + arrow keys. Move windows with alt + shift + arrow keys
-    XGrabKey(DISPLAY, XKeysymToKeycode(DISPLAY, XK_Left), Mod1Mask | ControlMask, frame, false, GrabModeAsync, GrabModeAsync);
-    XGrabKey(DISPLAY, XKeysymToKeycode(DISPLAY, XK_Right), Mod1Mask | ControlMask, frame, false, GrabModeAsync, GrabModeAsync);
-    XGrabKey(DISPLAY, XKeysymToKeycode(DISPLAY, XK_Up), Mod1Mask | ControlMask, frame, false, GrabModeAsync, GrabModeAsync);
-    XGrabKey(DISPLAY, XKeysymToKeycode(DISPLAY, XK_Down), Mod1Mask | ControlMask, frame, false, GrabModeAsync, GrabModeAsync);
+    XGrabKey(DISPLAY, XKeysymToKeycode(DISPLAY, XK_Left), AnyModifier, frame, false, GrabModeAsync, GrabModeSync);
+    XGrabKey(DISPLAY, XKeysymToKeycode(DISPLAY, XK_Right), AnyModifier, frame, false, GrabModeAsync, GrabModeSync);
+    XGrabKey(DISPLAY, XKeysymToKeycode(DISPLAY, XK_Up), AnyModifier, frame, false, GrabModeAsync, GrabModeSync);
+    XGrabKey(DISPLAY, XKeysymToKeycode(DISPLAY, XK_Down), AnyModifier, frame, false, GrabModeAsync, GrabModeSync);
 
     //Basic functions
-    XGrabKey(DISPLAY, XKeysymToKeycode(DISPLAY, XK_f | XK_F), Mod1Mask, frame, false, GrabModeAsync, GrabModeAsync);
-    XGrabKey(DISPLAY, XKeysymToKeycode(DISPLAY, XK_a | XK_A), Mod1Mask, frame, false, GrabModeAsync, GrabModeAsync);
+    XGrabKey(DISPLAY, XKeysymToKeycode(DISPLAY, XK_f | XK_F), AnyModifier, frame, false, GrabModeAsync, GrabModeSync);
+    XGrabKey(DISPLAY, XKeysymToKeycode(DISPLAY, XK_a | XK_A), AnyModifier, frame, false, GrabModeAsync, GrabModeSync);
 }
 
 void EshyWMWindow::remove_grab_events()

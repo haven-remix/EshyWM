@@ -3,6 +3,7 @@
 #include "window.h"
 #include "config.h"
 #include "taskbar.h"
+#include "switcher.h"
 
 extern "C" {
 #include <X11/Xutil.h>
@@ -70,6 +71,10 @@ void WindowManager::Run()
     taskbar = std::make_shared<EshyWMTaskbar>();
     taskbar->initialize_taskbar();
 
+    //Create switcher
+    switcher = std::make_shared<EshyWMSwitcher>();
+    switcher->initialize_switcher();
+
     //Handle windows already existing when the window manager is started
 
     XSetErrorHandler(&WindowManager::OnXError);
@@ -87,7 +92,7 @@ void WindowManager::Run()
     //Register, frame, and setup grab events for each top level window
     for(unsigned int i = 0; i < num_top_level_windows; ++i)
     {
-        if(top_level_windows[i] != taskbar->get_taskbar())
+        if(top_level_windows[i] != taskbar->get_taskbar() && top_level_windows[i] != switcher->get_switcher_window())
         {
             register_window(top_level_windows[i], true);
         }
@@ -117,6 +122,9 @@ void WindowManager::main_loop()
     //Dispatch event
     switch (event.type)
     {
+    case CreateNotify:
+        OnCreateNotify(event.xcreatewindow);
+        break;
     case UnmapNotify:
         OnUnmapNotify(event.xunmap);
         break;
@@ -156,6 +164,16 @@ void WindowManager::main_loop()
     }
 
     taskbar->draw_taskbar();
+    switcher->draw_switcher();
+}
+
+void WindowManager::OnCreateNotify(const XCreateWindowEvent& event)
+{
+    if(event.override_redirect)
+    {
+        std::cout << "ddss" << std::endl;
+        override_redirected_windows.push_back(event.window);
+    }
 }
 
 void WindowManager::OnConfigureNotify(const XConfigureEvent& event)
@@ -225,51 +243,50 @@ void WindowManager::OnVisibilityNotify(const XVisibilityEvent& event)
     {
         taskbar->raise_taskbar();
     }
+
+    if(switcher && event.window == switcher->get_switcher_window())
+    {
+        switcher->raise_switcher();
+    }
 }
 
 void WindowManager::OnButtonPress(const XButtonEvent& event)
 {
-    //Check in case the last press closed the window
-    if(frame_list.count(event.window) || titlebar_list.count(event.window))
-    {
-        //Save initial cursor position
-        drag_start_position = Vector2D<int>(event.x_root, event.y_root);
-
-        std::shared_ptr<EshyWMWindow> window = titlebar_list.count(event.window) ? titlebar_list.at(event.window)->get_window() : frame_list.at(event.window)->get_window();
-        window->recalculate_all_window_size_and_location();
-
-        XRaiseWindow(display, event.window);
-        XSetInputFocus(display, event.window, RevertToPointerRoot, event.time);
-        //Pass the click event through
-        XAllowEvents(display, ReplayPointer, event.time);
-
-        check_titlebar_button_pressed(event.window, event.x, event.y);
-    }
-
-    if (titlebar_list.count(event.window))
-    {
-        if(event.time - first_click_time < CONFIG->double_click_time && first_click_window == event.window)
-        {
-            titlebar_list.at(event.window)->get_window()->maximize_window();
-        }
-        else
-        {
-            first_click_time = event.time;
-            first_click_window = event.window;
-        }
-    }
+    //Pass the click event through
+    XAllowEvents(display, ReplayPointer, event.time);
 
     if(event.window == taskbar->get_taskbar())
     {
-        XSetInputFocus(display, event.window, RevertToPointerRoot, event.time);
-        //Pass the click event through
-        XAllowEvents(display, ReplayPointer, event.time);
         taskbar->check_taskbar_button_clicked(event.x, event.y);
+        return;
     }
+
+    if(frame_list.count(event.window))
+    {
+        frame_list.at(event.window)->get_window()->recalculate_all_window_size_and_location();
+    }
+    else if (titlebar_list.count(event.window))
+    {
+        titlebar_list.at(event.window)->get_window()->recalculate_all_window_size_and_location();
+        check_titlebar_button_pressed(event.window, event.x, event.y);
+
+        if(event.time - titlebar_double_click.first_click_time < CONFIG->double_click_time && titlebar_double_click.first_click_window == event.window)
+        titlebar_list.at(event.window)->get_window()->maximize_window();
+        else titlebar_double_click = {event.window, event.time};
+    }
+    else return;
+
+    //Save initial cursor position
+    drag_start_position = Vector2D<int>(event.x_root, event.y_root);
+    XRaiseWindow(display, event.window);
+    XSetInputFocus(display, event.window, RevertToPointerRoot, event.time);
 }
 
 void WindowManager::OnButtonRelease(const XButtonEvent& event)
 {
+    //Pass the click event through
+    XAllowEvents(display, ReplayPointer, event.time);
+
     if(event.state & Button1Mask || event.state & Button3Mask)
     {
         if(frame_list.count(event.window))
@@ -287,19 +304,7 @@ void WindowManager::OnMotionNotify(const XMotionEvent& event)
 {
     const Vector2D<int> delta = Vector2D<int>(event.x_root, event.y_root) - drag_start_position;
 
-    if(titlebar_list.count(event.window))
-    {
-        if(event.state & Button1Mask)
-        {
-            titlebar_list.at(event.window)->get_window()->move_window(delta);
-            titlebar_list.at(event.window)->get_window()->draw_titlebar();
-        }
-        else if (event.state & Button3Mask)
-        {
-            titlebar_list.at(event.window)->get_window()->resize_window(delta);
-        }
-    }
-    else
+    if(event.state & PRIMARY_MOD_KEY)
     {
         if(event.state & Button1Mask)
         {
@@ -310,11 +315,21 @@ void WindowManager::OnMotionNotify(const XMotionEvent& event)
         {
             frame_list.at(event.window)->get_window()->resize_window(delta);
         }
+
+        return;
+    }
+
+    if(titlebar_list.count(event.window))
+    {
+        titlebar_list.at(event.window)->get_window()->move_window(delta);
+        titlebar_list.at(event.window)->get_window()->draw_titlebar();
     }
 }
 
 void WindowManager::OnKeyPress(const XKeyEvent& event)
 {
+    XAllowEvents(display, ReplayKeyboard, event.time);
+
     if(!(event.state & Mod1Mask))
     {
         return;
@@ -322,6 +337,8 @@ void WindowManager::OnKeyPress(const XKeyEvent& event)
 
     CHECK_KEYSYM_TO_KEYCODE(event, XK_C)
     frame_list.at(event.window)->get_window()->close_window();
+    ELSE_CHECK_KEYSYM_TO_KEYCODE(event, XK_Tab)
+    switcher->show_switcher();
     else if(event.state & ControlMask)
     {
         CHECK_KEYSYM_TO_KEYCODE(event, XK_Left)
@@ -341,7 +358,10 @@ void WindowManager::OnKeyPress(const XKeyEvent& event)
 
 void WindowManager::OnKeyRelease(const XKeyEvent& event)
 {
-    
+    if(event.window == switcher->get_switcher_window())
+    {
+        switcher->confirm_choice();
+    }
 }
 
 
@@ -382,6 +402,7 @@ std::shared_ptr<EshyWMWindow> WindowManager::register_window(Window window, bool
     leaf_container->create_window(window);
     root_container->add_internal_container(leaf_container);
     taskbar->add_button(leaf_container->get_window());
+    switcher->add_window_option(leaf_container->get_window());
     return leaf_container->get_window();
 }
 

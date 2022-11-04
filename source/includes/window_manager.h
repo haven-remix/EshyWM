@@ -64,15 +64,14 @@ private:
     const Window root;
     static std::mutex mutex_wm_detected;
 
-    Vector2D<int> drag_start_position;
+    Vector2D<int> click_cursor_position;
     const Atom WM_PROTOCOLS;
     const Atom WM_DELETE_WINDOW;
     std::shared_ptr<class container> root_container;
     std::shared_ptr<class EshyWMTaskbar> taskbar;
     std::shared_ptr<class EshyWMSwitcher> switcher;
+    std::shared_ptr<class EshyWMContextMenu> context_menu;
     window_manager_data* manager_data;
-
-    std::vector<Window> override_redirected_windows;
 
     uint display_width;
     uint display_height;

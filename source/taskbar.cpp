@@ -8,7 +8,7 @@
 void EshyWMTaskbar::initialize_taskbar()
 {
     const unsigned int height = DisplayHeight(DISPLAY, DefaultScreen(DISPLAY));
-    taskbar = XCreateSimpleWindow(
+    taskbar_window = XCreateSimpleWindow(
         DISPLAY,
         ROOT,
         0,
@@ -19,22 +19,22 @@ void EshyWMTaskbar::initialize_taskbar()
         0,
         CONFIG->taskbar_color
     );
-    XSelectInput(DISPLAY, taskbar, SubstructureRedirectMask | SubstructureNotifyMask | VisibilityChangeMask);
-    XGrabButton(DISPLAY, Button1, 0, taskbar, false, ButtonPressMask | ButtonReleaseMask, GrabModeSync, GrabModeAsync, None, None);
-    XMapWindow(DISPLAY, taskbar);
+    XSelectInput(DISPLAY, taskbar_window, SubstructureRedirectMask | SubstructureNotifyMask | VisibilityChangeMask);
+    XGrabButton(DISPLAY, Button1, 0, taskbar_window, false, ButtonPressMask | ButtonReleaseMask, GrabModeSync, GrabModeAsync, None, None);
+    XMapWindow(DISPLAY, taskbar_window);
 
-    graphics_context_internal = XCreateGC(DISPLAY, taskbar, 0, 0);
+    graphics_context_internal = XCreateGC(DISPLAY, taskbar_window, 0, 0);
 }
 
 void EshyWMTaskbar::update_taskbar_size(uint width, uint height)
 {
-    XMoveWindow(EshyWM::get_window_manager()->get_display(), taskbar, 0, height - EshyWM::get_current_config()->taskbar_height);
-    XResizeWindow(EshyWM::get_window_manager()->get_display(), taskbar, width, EshyWM::get_current_config()->taskbar_height);
+    XMoveWindow(EshyWM::get_window_manager()->get_display(), taskbar_window, 0, height - EshyWM::get_current_config()->taskbar_height);
+    XResizeWindow(EshyWM::get_window_manager()->get_display(), taskbar_window, width, EshyWM::get_current_config()->taskbar_height);
 }
 
 void EshyWMTaskbar::raise_taskbar()
 {
-    XRaiseWindow(DISPLAY, taskbar);
+    XRaiseWindow(DISPLAY, taskbar_window);
 }
 
 void EshyWMTaskbar::draw_taskbar()
@@ -51,7 +51,7 @@ void EshyWMTaskbar::draw_taskbar()
 void EshyWMTaskbar::add_button(std::shared_ptr<EshyWMWindow> associated_window)
 {
     const rect size = {0, 0, EshyWM::get_current_config()->taskbar_height - 4, EshyWM::get_current_config()->taskbar_height - 4};
-    std::shared_ptr<Button> button = std::make_shared<Button>(taskbar, graphics_context_internal, size);
+    std::shared_ptr<Button> button = std::make_shared<Button>(taskbar_window, graphics_context_internal, size);
     taskbar_buttons.emplace(button, associated_window);
 }
 

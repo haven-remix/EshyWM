@@ -23,11 +23,11 @@ public:
 
     void check_taskbar_button_clicked(int cursor_x, int cursor_y);
 
-    Window get_taskbar() const {return taskbar;}
+    Window get_taskbar_window() const {return taskbar_window;}
 
 private:
 
-    Window taskbar;
+    Window taskbar_window;
     GC graphics_context_internal;
 
     std::unordered_map<std::shared_ptr<Button>, std::shared_ptr<class EshyWMWindow>> taskbar_buttons;

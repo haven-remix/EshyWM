@@ -29,6 +29,10 @@ public:
     unsigned long titlebar_button_pressed_color;
     unsigned long titlebar_title_color;
 
+    uint context_menu_width;
+    unsigned long context_menu_color;
+    unsigned long context_menu_secondary_color;
+
     uint taskbar_height;
     unsigned long taskbar_color;
 
@@ -62,6 +66,10 @@ public:
         titlebar_button_normal_color = 0x47436b;
         titlebar_button_hovered_color = 0x47436b;
         titlebar_title_color = 0xededed;
+
+        context_menu_width = 250;
+        context_menu_color = 0xeeeeee;
+        context_menu_secondary_color = 0x222222;
 
         taskbar_height = 30;
         taskbar_color = 0x283140;

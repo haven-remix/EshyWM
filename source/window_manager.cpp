@@ -2,6 +2,7 @@
 #include "eshywm.h"
 #include "window.h"
 #include "config.h"
+#include "context_menu.h"
 #include "taskbar.h"
 #include "switcher.h"
 
@@ -67,6 +68,11 @@ void WindowManager::Run()
         return;
     }
 
+    //Create context menu
+    context_menu = std::make_shared<EshyWMContextMenu>();
+    context_menu->initialize_context_menu();
+    XGrabButton(DISPLAY, Button3, AnyModifier, root, false, ButtonPressMask | ButtonReleaseMask, GrabModeSync, GrabModeAsync, root, None);
+
     //Create taskbar
     taskbar = std::make_shared<EshyWMTaskbar>();
     taskbar->initialize_taskbar();
@@ -92,7 +98,9 @@ void WindowManager::Run()
     //Register, frame, and setup grab events for each top level window
     for(unsigned int i = 0; i < num_top_level_windows; ++i)
     {
-        if(top_level_windows[i] != taskbar->get_taskbar() && top_level_windows[i] != switcher->get_switcher_window())
+        if(top_level_windows[i] != taskbar->get_taskbar_window()
+        && top_level_windows[i] != switcher->get_switcher_window()
+        && top_level_windows[i] != context_menu->get_context_menu_window())
         {
             register_window(top_level_windows[i], true);
         }
@@ -165,15 +173,12 @@ void WindowManager::main_loop()
 
     taskbar->draw_taskbar();
     switcher->draw_switcher();
+    context_menu->draw_context_menu();
 }
 
 void WindowManager::OnCreateNotify(const XCreateWindowEvent& event)
 {
-    if(event.override_redirect)
-    {
-        std::cout << "ddss" << std::endl;
-        override_redirected_windows.push_back(event.window);
-    }
+    
 }
 
 void WindowManager::OnConfigureNotify(const XConfigureEvent& event)
@@ -239,7 +244,7 @@ void WindowManager::OnMapRequest(const XMapRequestEvent& event)
 
 void WindowManager::OnVisibilityNotify(const XVisibilityEvent& event)
 {
-    if(taskbar && event.window == taskbar->get_taskbar())
+    if(taskbar && event.window == taskbar->get_taskbar_window())
     {
         taskbar->raise_taskbar();
     }
@@ -255,7 +260,12 @@ void WindowManager::OnButtonPress(const XButtonEvent& event)
     //Pass the click event through
     XAllowEvents(display, ReplayPointer, event.time);
 
-    if(event.window == taskbar->get_taskbar())
+    if(event.window != context_menu->get_context_menu_window())
+    {
+        context_menu->remove_context_menu();
+    }
+
+    if(event.window == taskbar->get_taskbar_window())
     {
         taskbar->check_taskbar_button_clicked(event.x, event.y);
         return;
@@ -276,8 +286,8 @@ void WindowManager::OnButtonPress(const XButtonEvent& event)
     }
     else return;
 
-    //Save initial cursor position
-    drag_start_position = Vector2D<int>(event.x_root, event.y_root);
+    //Save cursor position on click
+    click_cursor_position = Vector2D<int>(event.x_root, event.y_root);
     XRaiseWindow(display, event.window);
     XSetInputFocus(display, event.window, RevertToPointerRoot, event.time);
 }
@@ -289,6 +299,11 @@ void WindowManager::OnButtonRelease(const XButtonEvent& event)
 
     if(event.state & Button1Mask || event.state & Button3Mask)
     {
+        if(event.window == root && event.state & Button3Mask)
+        {
+            context_menu->show_context_menu(event.x, event.y);
+        }
+
         if(frame_list.count(event.window))
         {
             frame_list.at(event.window)->get_window()->motion_modify_ended();
@@ -302,7 +317,7 @@ void WindowManager::OnButtonRelease(const XButtonEvent& event)
 
 void WindowManager::OnMotionNotify(const XMotionEvent& event)
 {
-    const Vector2D<int> delta = Vector2D<int>(event.x_root, event.y_root) - drag_start_position;
+    const Vector2D<int> delta = Vector2D<int>(event.x_root, event.y_root) - click_cursor_position;
 
     if(event.state & PRIMARY_MOD_KEY)
     {

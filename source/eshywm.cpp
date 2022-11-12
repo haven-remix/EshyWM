@@ -1,10 +1,57 @@
 #include "eshywm.h"
 #include "window_manager.h"
 #include "config.h"
+#include "context_menu.h"
+#include "taskbar.h"
+#include "switcher.h"
 
 #include <glog/logging.h>
 #include <fstream>
 #include <iostream>
+#include <filesystem>
+#include <sstream>
+
+enum var_type
+{
+    VT_UINT,
+    VT_ULONG,
+    VT_STRING
+};
+
+template<class T>
+struct key_value_pair
+{
+    T key;
+    T value;
+};
+
+static key_value_pair<std::string> split(const std::string& s, char delimiter)
+{
+    const size_t pos = s.find(delimiter);
+    return {s.substr(0, pos).c_str(), s.substr(pos + 1, s.length() - pos).c_str()};
+}
+
+static void parse_config_option(std::string line, var_type type, void* config_var, std::string option_name, std::string start_location = " ")
+{
+    if(line.find(option_name) != std::string::npos)
+    {
+        const std::size_t spos = line.find(start_location);
+
+        switch(type)
+        {
+        case var_type::VT_UINT:
+            *((uint*)config_var) = std::stoi(line.substr(spos, line.length() - spos));
+            break;
+        case var_type::VT_ULONG:
+            *((ulong*)config_var) = std::stoul(line.substr(spos, line.length() - spos));
+            break;
+        case var_type::VT_STRING:
+            *(std::string*)config_var = line.substr(spos, line.length() - spos);
+            break;
+        };
+    }
+}
+
 
 bool EshyWM::initialize()
 {
@@ -15,11 +62,29 @@ bool EshyWM::initialize()
     window_manager = WindowManager::Create();
     if(!window_manager)
     {
-        LOG(ERROR) << "Failed to initialize window manager.";
         return false;
     }
 
-    window_manager->Run();
+    window_manager->initialize();
+    update_window_desktop_entries();
+
+    //Create context menu
+    context_menu = std::make_shared<EshyWMContextMenu>();
+    context_menu->initialize_context_menu();
+
+    //Create taskbar
+    taskbar = std::make_shared<EshyWMTaskbar>();
+    taskbar->initialize_taskbar();
+
+    //Create switcher
+    switcher = std::make_shared<EshyWMSwitcher>();
+    switcher->initialize_switcher();
+
+    window_manager->handle_preexisting_windows();
+    for(;;)
+    {
+        window_manager->main_loop();
+    }
     return true;
 }
 
@@ -31,56 +96,38 @@ void EshyWM::update_config()
         current_config = std::make_shared<EshyWMConfig>();
     }
 
-    //Initialize variable (in case some are not in the file, we will have default values)
-    get_current_config()->initialize_values();
-
     std::ifstream config_file(get_current_config()->get_config_file_path());
     std::string line;
 
     while(std::getline(config_file, line))
     {
-        if(line.find("background:") != std::string::npos)
-        {
-            std::size_t spos = line.find("\"");
-            std::size_t npos = line.length() - 1;
-            get_current_config()->background_path = line.substr(spos, npos);
-        }
-        else if(line.find("resize_step_size_width:") != std::string::npos)
-        {
-            std::size_t spos = line.find(" ");
-            std::size_t npos = line.length() - 1;
-            get_current_config()->resize_step_size_width = std::stoi(line.substr(spos, npos));
-        }
-        else if(line.find("resize_step_size_height:") != std::string::npos)
-        {
-            std::size_t spos = line.find(" ");
-            std::size_t npos = line.length() - 1;
-            get_current_config()->resize_step_size_height = std::stoi(line.substr(spos, npos));
-        }
-        else if(line.find("window_frame_border_width:") != std::string::npos)
-        {
-            std::size_t spos = line.find(" ");
-            std::size_t npos = line.length() - 1;
-            get_current_config()->window_frame_border_width = std::stoi(line.substr(spos, npos));
-        }
-        else if(line.find("window_frame_border_color:") != std::string::npos)
-        {
-            std::size_t spos = line.find(" ");
-            std::size_t npos = line.length() - 1;
-            get_current_config()->window_frame_border_color = std::stoi(line.substr(spos, npos));
-        }
-        else if(line.find("window_background_color:") != std::string::npos)
-        {
-            std::size_t spos = line.find(" ");
-            std::size_t npos = line.length() - 1;
-            get_current_config()->window_background_color = std::stoi(line.substr(spos, npos));
-        }
-        else if(line.find("window_padding:") != std::string::npos)
-        {
-            std::size_t spos = line.find(" ");
-            std::size_t npos = line.length() - 1;
-            get_current_config()->window_padding = std::stoi(line.substr(spos, npos));
-        }
+        parse_config_option(line, VT_STRING, &get_current_config()->background_path, "background:", "\"");
+
+        parse_config_option(line, VT_UINT, &get_current_config()->window_frame_border_width, "window_frame_border_width:");
+        parse_config_option(line, VT_UINT, &get_current_config()->window_frame_border_color, "window_frame_border_color:");
+        parse_config_option(line, VT_UINT, &get_current_config()->window_background_color, "window_background_color:");
+
+        parse_config_option(line, VT_UINT, &get_current_config()->titlebar_height, "titlebar_height:");
+        parse_config_option(line, VT_UINT, &get_current_config()->titlebar_button_size, "titlebar_button_size:");
+        parse_config_option(line, VT_UINT, &get_current_config()->titlebar_button_padding, "titlebar_button_padding:");
+        parse_config_option(line, VT_ULONG, &get_current_config()->titlebar_button_normal_color, "titlebar_button_normal_color:");
+        parse_config_option(line, VT_ULONG, &get_current_config()->titlebar_button_hovered_color, "titlebar_button_hovered_color:");
+        parse_config_option(line, VT_ULONG, &get_current_config()->titlebar_button_pressed_color, "titlebar_button_pressed_color:");
+        parse_config_option(line, VT_ULONG, &get_current_config()->titlebar_title_color, "titlebar_title_color:");
+
+        parse_config_option(line, VT_UINT, &get_current_config()->context_menu_width, "context_menu_width:");
+        parse_config_option(line, VT_ULONG, &get_current_config()->context_menu_color, "context_menu_color:");
+        parse_config_option(line, VT_ULONG, &get_current_config()->context_menu_secondary_color, "context_menu_secondary_color:");
+
+        parse_config_option(line, VT_UINT, &get_current_config()->taskbar_height, "taskbar_height:");
+        parse_config_option(line, VT_ULONG, &get_current_config()->taskbar_color, "taskbar_color:");
+
+        parse_config_option(line, VT_UINT, &get_current_config()->switcher_width, "switcher_width:");
+        parse_config_option(line, VT_UINT, &get_current_config()->switcher_height, "switcher_height:");
+        parse_config_option(line, VT_UINT, &get_current_config()->switcher_button_height, "switcher_button_height:");
+        parse_config_option(line, VT_ULONG, &get_current_config()->switcher_color, "switcher_color:");
+
+        parse_config_option(line, VT_ULONG, &get_current_config()->double_click_time, "double_click_time:");
     }
 
     config_file.close();
@@ -117,10 +164,52 @@ void EshyWM::run_startup_commands()
 
 void EshyWM::on_screen_resolution_changed(uint new_width, uint new_height)
 {
+    TASKBAR->update_taskbar_size(new_width, new_height);
+
     //Reset the background to match the screen size
     update_background();
 }
 
+
+void EshyWM::update_window_desktop_entries()
+{
+    const std::string global_desktop_entries = "/usr/share/applications";
+    std::string line;
+
+    for(const auto& file_path : std::filesystem::directory_iterator(global_desktop_entries))
+    {
+        if(file_path.path().extension() != ".desktop")
+        {
+            continue;
+        }
+
+        s_window_desktop_entry_data data;
+        std::ifstream file(file_path.path());
+
+        while(std::getline(file, line))
+        {
+            key_value_pair<std::string> kvp = split(line, '=');
+            if(kvp.key == "Name")
+            {
+                data.name = kvp.value;
+            }
+            else if(kvp.key == "Comment")
+            {
+                data.comment = kvp.value;
+            }
+            else if(kvp.key == "Exec")
+            {
+                data.exec_path = kvp.value;
+            }
+            else if(kvp.key == "Icon")
+            {
+                data.icon = kvp.value;
+            }
+        }
+
+        window_desktop_entry_data.emplace(data.name, data);
+    }
+}
 
 void EshyWM::update_background(std::string _background_path)
 {   

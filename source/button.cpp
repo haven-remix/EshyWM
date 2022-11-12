@@ -4,56 +4,92 @@
 #include "window_manager.h"
 #include "config.h"
 
-void Button::draw()
+#include <Imlib2.h>
+
+Button::Button(const Drawable _drawable, const GC _drawable_graphics_context, rect _button_geometry, button_color_data _button_color)
+    : drawable(_drawable)
+    , drawable_graphics_context(_drawable_graphics_context)
+    , button_geometry(_button_geometry)
+    , button_color(_button_color)
 {
-    XSetForeground(EshyWM::get_window_manager()->get_display(), drawable_graphics_context, button_color_normal);
-    XFillRectangle(
-        EshyWM::get_window_manager()->get_display(),
-        drawable,
-        drawable_graphics_context,
-        button_size_and_location.x,
-        button_size_and_location.y,
-        button_size_and_location.width,
-        button_size_and_location.height
-    );
+    current_button_color = button_color.normal;
 }
 
-void Button::draw(int x, int y)
+void Button::draw()
 {
-    set_position(x, y);
-    XSetForeground(EshyWM::get_window_manager()->get_display(), drawable_graphics_context, button_color_normal);
-    XFillRectangle(
-        EshyWM::get_window_manager()->get_display(),
-        drawable,
-        drawable_graphics_context,
-        x,
-        y,
-        button_size_and_location.width,
-        button_size_and_location.height
-    );
+    XSetForeground(DISPLAY, drawable_graphics_context, current_button_color);
+    XFillRectangle(DISPLAY, drawable, drawable_graphics_context, button_geometry.x, button_geometry.y, button_geometry.width, button_geometry.height);
 }
 
 void Button::set_position(int x, int y)
 {
-    button_size_and_location.x = x;
-    button_size_and_location.y = y;
+    button_geometry.x = x;
+    button_geometry.y = y;
 }
 
-void Button::set_size(unsigned int width, unsigned int height)
+void Button::set_size(uint width, uint height)
 {
-    button_size_and_location.width = width;
-    button_size_and_location.height = height;
+    button_geometry.width = width;
+    button_geometry.height = height;
 }
 
-bool Button::is_hovered(int cursor_x, int cursor_y)
+const bool Button::is_hovered(int cursor_x, int cursor_y) const
 {
-    if(cursor_x > button_size_and_location.x
-    && cursor_x < button_size_and_location.x + button_size_and_location.width
-    && cursor_y > button_size_and_location.y
-    && cursor_y < button_size_and_location.y + button_size_and_location.height)
+    if(cursor_x > button_geometry.x
+    && cursor_x < button_geometry.x + button_geometry.width
+    && cursor_y > button_geometry.y
+    && cursor_y < button_geometry.y + button_geometry.height)
     {
         return true;
     }
 
     return false;
+}
+
+
+ImageButton::ImageButton(Window parent_window, rect _button_geometry, char* _image_path)
+{
+    button_geometry = _button_geometry;
+    button_color = {0};
+
+    button_image = imlib_load_image(_image_path);
+
+    button_window = XCreateSimpleWindow(DISPLAY, parent_window, 0, 0, button_geometry.width, button_geometry.height, 0, 0, 0);
+    XSelectInput(DISPLAY, button_window, StructureNotifyMask);
+    XMapWindow(DISPLAY, button_window);
+    XSync(DISPLAY, false);
+}
+
+ImageButton::ImageButton(Window parent_window, rect _button_geometry, Imlib_Image _image)
+{
+    button_geometry = _button_geometry;
+    button_color = {0};
+
+    button_image = _image;
+
+    button_window = XCreateSimpleWindow(DISPLAY, parent_window, 0, 0, button_geometry.width, button_geometry.height, 0, 0, 0);
+    XSelectInput(DISPLAY, button_window, StructureNotifyMask);
+    XMapWindow(DISPLAY, button_window);
+    XSync(DISPLAY, false);
+}
+
+void ImageButton::draw()
+{
+    imlib_context_set_drawable(button_window);
+    imlib_context_set_image(button_image);
+    imlib_render_image_on_drawable_at_size(0, 0, button_geometry.width, button_geometry.height);
+}
+
+void ImageButton::set_position(int x, int y)
+{
+    button_geometry.x = x;
+    button_geometry.y = y;
+    XMoveWindow(DISPLAY, button_window, x, y);
+}
+
+void ImageButton::set_size(uint width, uint height)
+{
+    button_geometry.width = width;
+    button_geometry.height = height;
+    XResizeWindow(DISPLAY, button_window, width, height);
 }

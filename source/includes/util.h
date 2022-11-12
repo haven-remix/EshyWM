@@ -1,8 +1,6 @@
 #pragma once
 
-extern "C" {
 #include <X11/Xlib.h>
-}
 
 template <typename T>
 class Vector2D

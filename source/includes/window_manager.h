@@ -1,10 +1,7 @@
 
 #pragma once
 
-extern "C" {
-#include <X11/Xlib.h>
-}
-
+#include <Imlib2.h>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -42,19 +39,19 @@ class WindowManager
 {
 public:
 
-    WindowManager();
-    ~WindowManager();
-
     static std::shared_ptr<WindowManager> Create(const std::string& display_str = std::string());
 
-    void Run();
+    WindowManager();
+    ~WindowManager();
+    
+    void initialize();
+    void main_loop();
+    void handle_preexisting_windows();
 
     /**Getters*/
     static Display* get_display() {return display;}
     const Window get_root() {return root;}
     window_manager_data* get_manager_data() const {return manager_data;}
-    const Atom get_atom_wm_protocols() {return WM_PROTOCOLS;}
-    const Atom get_atom_wm_delete_window() {return WM_DELETE_WINDOW;}
     uint get_display_width() const {return display_width;}
     uint get_display_height() const {return display_height;}
 
@@ -65,12 +62,7 @@ private:
     static std::mutex mutex_wm_detected;
 
     Vector2D<int> click_cursor_position;
-    const Atom WM_PROTOCOLS;
-    const Atom WM_DELETE_WINDOW;
     std::shared_ptr<class container> root_container;
-    std::shared_ptr<class EshyWMTaskbar> taskbar;
-    std::shared_ptr<class EshyWMSwitcher> switcher;
-    std::shared_ptr<class EshyWMContextMenu> context_menu;
     window_manager_data* manager_data;
 
     uint display_width;
@@ -81,10 +73,7 @@ private:
 
     double_click_data titlebar_double_click;
 
-    void main_loop();
-
     /**Event handlers*/
-    void OnCreateNotify(const XCreateWindowEvent& event);
     void OnUnmapNotify(const XUnmapEvent& event);
     void OnConfigureNotify(const XConfigureEvent& event);
     void OnMapRequest(const XMapRequestEvent& event);
@@ -103,6 +92,6 @@ private:
 
     /**Helper functions*/
     std::shared_ptr<class EshyWMWindow> register_window(Window window, bool b_was_created_before_window_manager);
-    void rescale_windows(uint width, uint height);
+    void rescale_windows(uint old_width, uint old_height);
     void check_titlebar_button_pressed(Window window, int cursor_x, int cursor_y);
 };

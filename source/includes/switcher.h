@@ -1,9 +1,7 @@
 
 #pragma once
 
-extern "C" {
-#include <X11/Xlib.h>
-}
+#include "util.h"
 
 #include <memory>
 #include <unordered_map>
@@ -16,7 +14,8 @@ public:
     void show_switcher();
     void remove_switcher();
     void raise_switcher();
-    void draw_switcher();
+    void draw();
+    void next_option();
 
     void add_window_option(std::shared_ptr<class EshyWMWindow> associated_window);
     void confirm_choice();
@@ -29,6 +28,7 @@ private:
 
     Window switcher_window;
     GC graphics_context_internal;
+    bool b_switcher_visible;
 
     std::unordered_map<std::shared_ptr<class Button>, std::shared_ptr<class EshyWMWindow>> switcher_window_options;
 };

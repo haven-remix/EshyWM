@@ -1,7 +1,5 @@
 
-extern "C" {
 #include <X11/Xutil.h>
-}
 
 #include "window_manager.h"
 #include "window.h"
@@ -61,11 +59,12 @@ void EshyWMWindow::frame_window(bool b_was_created_before_window_manager)
     }
 
     graphics_context_internal = XCreateGC(DISPLAY, frame, 0, 0);
+    
     const rect initial_size = {0, 0, CONFIG->titlebar_button_size, CONFIG->titlebar_button_size};
-    minimize_button = std::make_shared<Button>(titlebar, graphics_context_internal, initial_size, CONFIG->titlebar_button_normal_color, CONFIG->titlebar_button_hovered_color, CONFIG->titlebar_button_pressed_color);
-    maximize_button = std::make_shared<Button>(titlebar, graphics_context_internal, initial_size, CONFIG->titlebar_button_normal_color, CONFIG->titlebar_button_hovered_color, CONFIG->titlebar_button_pressed_color);
-    close_button = std::make_shared<Button>(titlebar, graphics_context_internal, initial_size, CONFIG->titlebar_button_normal_color, CONFIG->titlebar_button_hovered_color, CONFIG->titlebar_button_pressed_color);
-    draw_titlebar();
+    button_color_data button_color = {CONFIG->titlebar_button_normal_color, CONFIG->titlebar_button_hovered_color, CONFIG->titlebar_button_pressed_color};
+    minimize_button = std::make_shared<Button>(titlebar, graphics_context_internal, initial_size, button_color);
+    maximize_button = std::make_shared<Button>(titlebar, graphics_context_internal, initial_size, button_color);
+    close_button = std::make_shared<Button>(titlebar, graphics_context_internal, initial_size, button_color);
 }
 
 void EshyWMWindow::unframe_window()
@@ -99,8 +98,8 @@ void EshyWMWindow::setup_grab_events(bool b_was_created_before_window_manager)
 
     //Basic movement and resizing
     XGrabButton(DISPLAY, Button1, AnyModifier, frame, false, ButtonPressMask, GrabModeSync, GrabModeAsync, None, None);
-    XGrabButton(DISPLAY, Button1, PRIMARY_MOD_KEY, frame, false, ButtonPressMask | ButtonReleaseMask | ButtonMotionMask, GrabModeAsync, GrabModeAsync, None, None);
-    XGrabButton(DISPLAY, Button3, PRIMARY_MOD_KEY, frame, false, ButtonReleaseMask | ButtonMotionMask, GrabModeAsync, GrabModeAsync, None, None);
+    XGrabButton(DISPLAY, Button1, Mod4Mask | ShiftMask, frame, false, ButtonPressMask | ButtonReleaseMask | ButtonMotionMask, GrabModeAsync, GrabModeAsync, None, None);
+    XGrabButton(DISPLAY, Button3, Mod4Mask | ShiftMask, frame, false, ButtonReleaseMask | ButtonMotionMask, GrabModeAsync, GrabModeAsync, None, None);
 
     if(!IS_TILING_MODE())
     {
@@ -117,8 +116,8 @@ void EshyWMWindow::setup_grab_events(bool b_was_created_before_window_manager)
     XGrabKey(DISPLAY, XKeysymToKeycode(DISPLAY, XK_Down), AnyModifier, frame, false, GrabModeAsync, GrabModeSync);
 
     //Basic functions
-    XGrabKey(DISPLAY, XKeysymToKeycode(DISPLAY, XK_f | XK_F), AnyModifier, frame, false, GrabModeAsync, GrabModeSync);
-    XGrabKey(DISPLAY, XKeysymToKeycode(DISPLAY, XK_a | XK_A), AnyModifier, frame, false, GrabModeAsync, GrabModeSync);
+    XGrabKey(DISPLAY, XKeysymToKeycode(DISPLAY, XK_f), AnyModifier, frame, false, GrabModeAsync, GrabModeSync);
+    XGrabKey(DISPLAY, XKeysymToKeycode(DISPLAY, XK_a), AnyModifier, frame, false, GrabModeAsync, GrabModeSync);
 }
 
 void EshyWMWindow::remove_grab_events()
@@ -187,16 +186,20 @@ void EshyWMWindow::close_window()
     Atom* supported_protocols;
     int num_supported_protocols;
 
-    if (XGetWMProtocols(DISPLAY, window, &supported_protocols, &num_supported_protocols) && (std::find(supported_protocols, supported_protocols + num_supported_protocols, EshyWM::get_window_manager()->get_atom_wm_delete_window()) != supported_protocols + num_supported_protocols))
+    static const Atom wm_delete_window = XInternAtom(DISPLAY, "WM_DELETE_WINDOW", false);
+
+    if (XGetWMProtocols(DISPLAY, window, &supported_protocols, &num_supported_protocols) && (std::find(supported_protocols, supported_protocols + num_supported_protocols, wm_delete_window) != supported_protocols + num_supported_protocols))
     {
+        static const Atom wm_protocols = XInternAtom(DISPLAY, "WM_PROTOCOLS", false);
+
         LOG(INFO) << "Gracefully deleting window " << window;
         XEvent message;
         memset(&message, 0, sizeof(message));
         message.xclient.type = ClientMessage;
-        message.xclient.message_type = WINDOW_MANAGER->get_atom_wm_protocols();
+        message.xclient.message_type = wm_protocols;
         message.xclient.window = window;
         message.xclient.format = 32;
-        message.xclient.data.l[0] = WINDOW_MANAGER->get_atom_wm_delete_window();
+        message.xclient.data.l[0] = wm_delete_window;
         XSendEvent(DISPLAY, window, false, 0 , &message);
     }
     else
@@ -282,7 +285,7 @@ void EshyWMWindow::recalculate_all_window_size_and_location()
 }
 
 
-void EshyWMWindow::draw_titlebar()
+void EshyWMWindow::draw()
 {
     if(IS_TILING_MODE())
     {
@@ -302,16 +305,19 @@ void EshyWMWindow::draw_titlebar()
     };
 
     //Draw buttons
-    minimize_button->draw(calc_x(3), button_y_offset);
-    maximize_button->draw(calc_x(2), button_y_offset);
-    close_button->draw(calc_x(1), button_y_offset);
+    minimize_button->set_position(calc_x(3), button_y_offset);
+    minimize_button->draw();
+    maximize_button->set_position(calc_x(2), button_y_offset);
+    maximize_button->draw();
+    close_button->set_position(calc_x(1), button_y_offset);
+    close_button->draw();
     
     XTextProperty name;
     XGetWMName(DISPLAY, window, &name);
     
     //Draw title
-    XSetForeground(DISPLAY, graphics_context_internal, EshyWM::get_current_config()->titlebar_title_color);
-    XDrawString(DISPLAY, titlebar, graphics_context_internal, 10, 13, static_cast<char*>(static_cast<void*>(name.value)), name.nitems);
+    XSetForeground(DISPLAY, graphics_context_internal, CONFIG->titlebar_title_color);
+    XDrawString(DISPLAY, titlebar, graphics_context_internal, 10, 13, reinterpret_cast<char*>(name.value), name.nitems);
 }
 
 int EshyWMWindow::is_cursor_on_titlebar_buttons(Window window, int cursor_x, int cursor_y)

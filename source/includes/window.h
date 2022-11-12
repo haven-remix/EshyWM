@@ -1,9 +1,5 @@
 #pragma once
 
-extern "C" {
-#include <X11/Xlib.h>
-}
-
 #include "util.h"
 
 /**
@@ -38,7 +34,7 @@ public:
     void motion_modify_ended();
     void recalculate_all_window_size_and_location();
 
-    void draw_titlebar();
+    void draw();
 
     /**@return 0 = none; 1 = minimize; 2 = maximize; 3 = close*/
     int is_cursor_on_titlebar_buttons(Window window, int cursor_x, int cursor_y);

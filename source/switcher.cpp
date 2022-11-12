@@ -3,9 +3,7 @@
 #include "eshywm.h"
 #include "button.h"
 
-extern "C" {
 #include <X11/Xutil.h>
-}
 
 void EshyWMSwitcher::initialize_switcher()
 {
@@ -22,23 +20,31 @@ void EshyWMSwitcher::initialize_switcher()
     );
     XSelectInput(DISPLAY, switcher_window, SubstructureRedirectMask | SubstructureNotifyMask | VisibilityChangeMask);
     XGrabButton(DISPLAY, Button1, 0, switcher_window, false, ButtonPressMask | ButtonReleaseMask, GrabModeSync, GrabModeAsync, None, None);
-    XGrabKey(DISPLAY, XKeysymToKeycode(DISPLAY, XK_Up), 0, switcher_window, false, GrabModeAsync, GrabModeAsync);
-    XGrabKey(DISPLAY, XKeysymToKeycode(DISPLAY, XK_Down), 0, switcher_window, false, GrabModeAsync, GrabModeAsync);
-    XGrabKey(DISPLAY, XKeysymToKeycode(DISPLAY, XK_Alt_L), 0, switcher_window, false, GrabModeAsync, GrabModeAsync);
-    XGrabKey(DISPLAY, XKeysymToKeycode(DISPLAY, XK_Tab), 0, ROOT, false, GrabModeAsync, GrabModeAsync);
+    XGrabKey(DISPLAY, XKeysymToKeycode(DISPLAY, XK_Up), AnyModifier, switcher_window, false, GrabModeAsync, GrabModeAsync);
+    XGrabKey(DISPLAY, XKeysymToKeycode(DISPLAY, XK_Down), AnyModifier, switcher_window, false, GrabModeAsync, GrabModeAsync);
+    XGrabKey(DISPLAY, XKeysymToKeycode(DISPLAY, XK_Alt_L), AnyModifier, switcher_window, false, GrabModeAsync, GrabModeAsync);
+    //XGrabKey(DISPLAY, XKeysymToKeycode(DISPLAY, XK_Tab), Mod1Mask, ROOT, false, GrabModeAsync, GrabModeAsync);
 
     graphics_context_internal = XCreateGC(DISPLAY, switcher_window, 0, 0);
 }
 
 void EshyWMSwitcher::show_switcher()
 {
-    XMapWindow(DISPLAY, switcher_window);
-    raise_switcher();
+    if(!b_switcher_visible)
+    {
+        b_switcher_visible = true;
+        XMapWindow(DISPLAY, switcher_window);
+        raise_switcher();
+    }
 }
 
 void EshyWMSwitcher::remove_switcher()
 {
-    XUnmapWindow(DISPLAY, switcher_window);
+    if(b_switcher_visible)
+    {
+        b_switcher_visible = false;
+        XUnmapWindow(DISPLAY, switcher_window);
+    }
 }
 
 void EshyWMSwitcher::raise_switcher()
@@ -47,14 +53,20 @@ void EshyWMSwitcher::raise_switcher()
     XSetInputFocus(DISPLAY, switcher_window, RevertToPointerRoot, CurrentTime);
 }
 
-void EshyWMSwitcher::draw_switcher()
+void EshyWMSwitcher::draw()
 {
     int i = 0;
     for(auto const& [button, window] : switcher_window_options)
     {
-        button->draw(10, (CONFIG->switcher_button_height * i) + 10);
+        button->set_position(10, (CONFIG->switcher_button_height * i) + 10);
+        button->draw();
         i++;
     }
+}
+
+void EshyWMSwitcher::next_option()
+{
+    std::cout << "next option" << std::endl;
 }
 
 void EshyWMSwitcher::add_window_option(std::shared_ptr<class EshyWMWindow> associated_window)

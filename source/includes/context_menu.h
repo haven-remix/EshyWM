@@ -15,7 +15,7 @@ public:
     void show_context_menu(int x, int y);
     void remove_context_menu();
     void raise_context_menu();
-    void draw_context_menu();
+    void draw();
 
     Window get_context_menu_window() const {return context_menu_window;}
 

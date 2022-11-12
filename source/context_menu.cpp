@@ -19,7 +19,7 @@ void EshyWMContextMenu::initialize_context_menu()
     );
     XSelectInput(DISPLAY, context_menu_window, SubstructureRedirectMask | SubstructureNotifyMask | VisibilityChangeMask);
     XGrabButton(DISPLAY, Button1, 0, context_menu_window, false, ButtonPressMask | ButtonReleaseMask, GrabModeSync, GrabModeAsync, None, None);
-    XMapWindow(DISPLAY, context_menu_window);
+    XGrabButton(DISPLAY, Button3, AnyModifier, ROOT, false, ButtonPressMask | ButtonReleaseMask, GrabModeSync, GrabModeAsync, ROOT, None);
 
     graphics_context_internal = XCreateGC(DISPLAY, context_menu_window, 0, 0);
 }
@@ -41,12 +41,13 @@ void EshyWMContextMenu::raise_context_menu()
     XRaiseWindow(DISPLAY, context_menu_window);
 }
 
-void EshyWMContextMenu::draw_context_menu()
+void EshyWMContextMenu::draw()
 {
     int i = 0;
     for(std::shared_ptr<Button> button : context_menu_buttons)
     {
-        button->draw(10, (CONFIG->switcher_button_height * i) + 10);
+        button->set_position(10, (CONFIG->switcher_button_height * i) + 10);
+        button->draw();
         i++;
     }
 }

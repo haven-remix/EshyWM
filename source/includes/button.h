@@ -1,63 +1,61 @@
 
 #pragma once
 
-extern "C" {
-#include <X11/Xlib.h>
-}
-
 #include "util.h"
+
+#include <Imlib2.h>
+
+typedef unsigned long Color;
+
+struct button_color_data
+{
+    Color normal;
+    Color hovered;
+    Color pressed;
+};
 
 class Button
 {
 public:
 
-    Button(const Drawable _drawable, const GC _drawable_graphics_context)
-        : drawable(_drawable)
-        , drawable_graphics_context(_drawable_graphics_context)
-        , button_color_normal(0x000000)
-        , button_color_hovered(0x000000)
-        , button_color_pressed(0x000000)
+    Button(const Drawable _drawable, const GC _drawable_graphics_context, rect _button_size_and_location, button_color_data _button_color = {0});
+
+    virtual void draw();
+    virtual void set_position(int x, int y);
+    virtual void set_size(uint width, uint height);
+
+    const bool is_hovered(int cursor_x, int cursor_y) const;
+
+protected:
+
+    Button()
+        : drawable(0)
+        , drawable_graphics_context(nullptr)
+        , button_geometry({0, 0, 20, 20})
+        , button_color({0})
     {}
-
-    Button(const Drawable _drawable, const GC _drawable_graphics_context, rect _button_size_and_location)
-        : drawable(_drawable)
-        , drawable_graphics_context(_drawable_graphics_context)
-        , button_size_and_location(_button_size_and_location)
-        , button_color_normal(0x000000)
-        , button_color_hovered(0x000000)
-        , button_color_pressed(0x000000)
-    {}
-
-    Button(
-        const Drawable _drawable,
-        const GC _drawable_graphics_context,
-        rect _button_size_and_location,
-        unsigned long _button_color_normal,
-        unsigned long _button_color_hovered,
-        unsigned long _button_color_pressed
-    )
-        : drawable(_drawable)
-        , drawable_graphics_context(_drawable_graphics_context)
-        , button_size_and_location(_button_size_and_location)
-        , button_color_normal(_button_color_normal)
-        , button_color_hovered(_button_color_hovered)
-        , button_color_pressed(_button_color_pressed)
-    {}
-
-    void draw();
-    void draw(int x, int y);
-    bool is_hovered(int cursor_x, int cursor_y);
-
-    void set_position(int x, int y);
-    void set_size(unsigned int width, unsigned int height);
-
-private:
 
     const Drawable drawable;
     const GC drawable_graphics_context;
 
-    rect button_size_and_location;
-    unsigned long button_color_normal;
-    unsigned long button_color_hovered;
-    unsigned long button_color_pressed;
+    rect button_geometry;
+    button_color_data button_color;
+    Color current_button_color;
+};
+
+class ImageButton : public Button
+{
+public:
+
+    ImageButton(Window parent_window, rect _button_geometry, char* _image_path);
+    ImageButton(Window parent_window, rect _button_geometry, Imlib_Image _image);
+
+    virtual void draw() override;
+    virtual void set_position(int x, int y) override;
+    virtual void set_size(uint width, uint height) override;
+
+protected:
+
+    Imlib_Image button_image;
+    Window button_window;
 };

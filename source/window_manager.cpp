@@ -6,12 +6,8 @@
 #include "taskbar.h"
 #include "switcher.h"
 
-extern "C" {
 #include <X11/Xutil.h>
-}
-
 #include <glog/logging.h>
-
 #include <cstring>
 #include <iostream>
 #include <algorithm>
@@ -22,6 +18,21 @@ extern "C" {
 bool WindowManager::b_wm_detected;
 std::mutex WindowManager::mutex_wm_detected;
 Display* WindowManager::display;
+
+bool is_key_down(Display* display, char* target_string)
+{
+    char keys_return[32] = {0};
+    KeySym target_sym = XStringToKeysym(target_string);
+    KeyCode target_code = XKeysymToKeycode(display, target_sym);
+
+    int target_byte = target_code / 8;
+    int target_bit = target_code % 8;
+    int target_mask = 0x01 << target_bit;
+
+    XQueryKeymap(display, keys_return);
+    return keys_return[target_byte] & target_mask;
+}
+
 
 std::shared_ptr<WindowManager> WindowManager::Create(const std::string& display_str)
 {
@@ -37,15 +48,16 @@ std::shared_ptr<WindowManager> WindowManager::Create(const std::string& display_
 }
 
 WindowManager::WindowManager()
-    : WM_PROTOCOLS(XInternAtom(display, "WM_PROTOCOLS", false))
-    , WM_DELETE_WINDOW(XInternAtom(display, "WM_DELETE_WINDOW", false))
-    , root(DefaultRootWindow(display))
+    : root(DefaultRootWindow(display))
     , manager_data(new window_manager_data())
 {
+    imlib_context_set_display(display);
+    imlib_context_set_visual(DefaultVisual(display, DefaultScreen(display)));
+    imlib_context_set_colormap(DefaultColormap(display, DefaultScreen(display)));
+    imlib_context_set_dither(1);
+
     display_width = DisplayWidth(display, DefaultScreen(display));
     display_height = DisplayHeight(display, DefaultScreen(display)) - (manager_data->b_tiling_mode ? 0 : CONFIG->taskbar_height);
-    root_container = std::make_shared<container>(EOrientation::O_Horizontal, EContainerType::CT_Root);
-    root_container->set_size(display_width, display_height);
 }
 
 WindowManager::~WindowManager()
@@ -53,7 +65,7 @@ WindowManager::~WindowManager()
     XCloseDisplay(display);
 }
 
-void WindowManager::Run()
+void WindowManager::initialize()
 {
     std::lock_guard<std::mutex> lock(mutex_wm_detected);
 
@@ -68,39 +80,27 @@ void WindowManager::Run()
         return;
     }
 
-    //Create context menu
-    context_menu = std::make_shared<EshyWMContextMenu>();
-    context_menu->initialize_context_menu();
-    XGrabButton(DISPLAY, Button3, AnyModifier, root, false, ButtonPressMask | ButtonReleaseMask, GrabModeSync, GrabModeAsync, root, None);
+    //Create root container
+    root_container = std::make_shared<container>(EOrientation::O_Horizontal, EContainerType::CT_Root);
+    root_container->set_size(display_width, display_height);
+}
 
-    //Create taskbar
-    taskbar = std::make_shared<EshyWMTaskbar>();
-    taskbar->initialize_taskbar();
-
-    //Create switcher
-    switcher = std::make_shared<EshyWMSwitcher>();
-    switcher->initialize_switcher();
-
-    //Handle windows already existing when the window manager is started
-
+void WindowManager::handle_preexisting_windows()
+{
     XSetErrorHandler(&WindowManager::OnXError);
-    //Grab X server to prevent windows from changing under us
     XGrabServer(display);
 
     Window returned_root;
     Window returned_parent;
     Window* top_level_windows;
-
     unsigned int num_top_level_windows;
     XQueryTree(display, root, &returned_root, &returned_parent, &top_level_windows, &num_top_level_windows);
-    CHECK_EQ(returned_root, root);
 
-    //Register, frame, and setup grab events for each top level window
     for(unsigned int i = 0; i < num_top_level_windows; ++i)
     {
-        if(top_level_windows[i] != taskbar->get_taskbar_window()
-        && top_level_windows[i] != switcher->get_switcher_window()
-        && top_level_windows[i] != context_menu->get_context_menu_window())
+        if(top_level_windows[i] != TASKBAR->get_taskbar_window()
+        && top_level_windows[i] != SWITCHER->get_switcher_window()
+        && top_level_windows[i] != CONTEXT_MENU->get_context_menu_window())
         {
             register_window(top_level_windows[i], true);
         }
@@ -108,13 +108,23 @@ void WindowManager::Run()
 
     XFree(top_level_windows);
     XUngrabServer(display);
+}
 
-    for (;;)
-    {
-        main_loop();
-    }
+int WindowManager::OnWMDetected(Display* display, XErrorEvent* event)
+{
+    CHECK_EQ(static_cast<int>(event->error_code), BadAccess);
+    b_wm_detected = true;
+    return 0;
+}
 
-    XUngrabButton(display, XKeysymToKeycode(display, XK_Tab), Mod1Mask, root);
+int WindowManager::OnXError(Display* display, XErrorEvent* event)
+{
+    const int MAX_ERROR_TEXT_LEGTH = 1024;
+    char error_text[MAX_ERROR_TEXT_LEGTH];
+
+    XGetErrorText(display, event->error_code, error_text, sizeof(error_text));
+
+    return 0;
 }
 
 void WindowManager::main_loop()
@@ -123,16 +133,11 @@ void WindowManager::main_loop()
     frame_list = root_container->get_all_container_map_by_frame();
     titlebar_list = root_container->get_all_container_map_by_titlebar();
 
-    //Get next event
     XEvent event;
     XNextEvent(display, &event);
-
-    //Dispatch event
+    
     switch (event.type)
     {
-    case CreateNotify:
-        OnCreateNotify(event.xcreatewindow);
-        break;
     case UnmapNotify:
         OnUnmapNotify(event.xunmap);
         break;
@@ -168,30 +173,26 @@ void WindowManager::main_loop()
 
     for(auto &[titlebar, container] : titlebar_list)
     {
-        container->get_window()->draw_titlebar();
+        container->get_window()->draw();
     }
 
-    taskbar->draw_taskbar();
-    switcher->draw_switcher();
-    context_menu->draw_context_menu();
-}
-
-void WindowManager::OnCreateNotify(const XCreateWindowEvent& event)
-{
-    
+    TASKBAR->draw();
+    SWITCHER->draw();
+    CONTEXT_MENU->draw();
 }
 
 void WindowManager::OnConfigureNotify(const XConfigureEvent& event)
 {
-    if(event.window == root)
+    if(event.window == root && event.display == display)
     {
+        const uint previous_width = display_width;
+        const uint previous_height = display_height;
         display_width = event.width;
         display_height = event.height - (manager_data->b_tiling_mode ? 0 : CONFIG->taskbar_height);
-        taskbar->update_taskbar_size(event.width, event.height);
-
+        
         //Notify screen resolution changed
         EshyWM::Get().on_screen_resolution_changed(event.width, event.height);
-        rescale_windows(event.window, event.height);
+        rescale_windows(previous_width, previous_height);
     }
 }
 
@@ -244,14 +245,14 @@ void WindowManager::OnMapRequest(const XMapRequestEvent& event)
 
 void WindowManager::OnVisibilityNotify(const XVisibilityEvent& event)
 {
-    if(taskbar && event.window == taskbar->get_taskbar_window())
+    if(TASKBAR && event.window == TASKBAR->get_taskbar_window())
     {
-        taskbar->raise_taskbar();
+        TASKBAR->raise_taskbar();
     }
 
-    if(switcher && event.window == switcher->get_switcher_window())
+    if(SWITCHER && event.window == SWITCHER->get_switcher_window())
     {
-        switcher->raise_switcher();
+        SWITCHER->raise_switcher();
     }
 }
 
@@ -260,14 +261,14 @@ void WindowManager::OnButtonPress(const XButtonEvent& event)
     //Pass the click event through
     XAllowEvents(display, ReplayPointer, event.time);
 
-    if(event.window != context_menu->get_context_menu_window())
+    if(event.window != CONTEXT_MENU->get_context_menu_window())
     {
-        context_menu->remove_context_menu();
+        CONTEXT_MENU->remove_context_menu();
     }
 
-    if(event.window == taskbar->get_taskbar_window())
+    if(event.window == TASKBAR->get_taskbar_window())
     {
-        taskbar->check_taskbar_button_clicked(event.x, event.y);
+        TASKBAR->check_taskbar_button_clicked(event.x, event.y);
         return;
     }
 
@@ -301,7 +302,7 @@ void WindowManager::OnButtonRelease(const XButtonEvent& event)
     {
         if(event.window == root && event.state & Button3Mask)
         {
-            context_menu->show_context_menu(event.x, event.y);
+            CONTEXT_MENU->show_context_menu(event.x, event.y);
         }
 
         if(frame_list.count(event.window))
@@ -319,16 +320,16 @@ void WindowManager::OnMotionNotify(const XMotionEvent& event)
 {
     const Vector2D<int> delta = Vector2D<int>(event.x_root, event.y_root) - click_cursor_position;
 
-    if(event.state & PRIMARY_MOD_KEY)
+    if(event.state & Mod4Mask && event.state & ShiftMask)
     {
         if(event.state & Button1Mask)
         {
-            frame_list.at(event.window)->get_window()->move_window(delta);
-            frame_list.at(event.window)->get_window()->draw_titlebar();
+           frame_list.at(event.window)->get_window()->move_window(delta);
+           frame_list.at(event.window)->get_window()->draw();
         }
         else if(event.state & Button3Mask)
         {
-            frame_list.at(event.window)->get_window()->resize_window(delta);
+           frame_list.at(event.window)->get_window()->resize_window(delta);
         }
 
         return;
@@ -337,7 +338,7 @@ void WindowManager::OnMotionNotify(const XMotionEvent& event)
     if(titlebar_list.count(event.window))
     {
         titlebar_list.at(event.window)->get_window()->move_window(delta);
-        titlebar_list.at(event.window)->get_window()->draw_titlebar();
+        titlebar_list.at(event.window)->get_window()->draw();
     }
 }
 
@@ -345,15 +346,19 @@ void WindowManager::OnKeyPress(const XKeyEvent& event)
 {
     XAllowEvents(display, ReplayKeyboard, event.time);
 
-    if(!(event.state & Mod1Mask))
+    if(!(event.state & Mod4Mask))
     {
         return;
     }
 
+    if(event.window == root && event.keycode == XKeysymToKeycode(DISPLAY, XK_Tab))
+    {
+        SWITCHER->show_switcher();
+        SWITCHER->next_option();
+    }
+
     CHECK_KEYSYM_TO_KEYCODE(event, XK_C)
     frame_list.at(event.window)->get_window()->close_window();
-    ELSE_CHECK_KEYSYM_TO_KEYCODE(event, XK_Tab)
-    switcher->show_switcher();
     else if(event.state & ControlMask)
     {
         CHECK_KEYSYM_TO_KEYCODE(event, XK_Left)
@@ -373,28 +378,10 @@ void WindowManager::OnKeyPress(const XKeyEvent& event)
 
 void WindowManager::OnKeyRelease(const XKeyEvent& event)
 {
-    if(event.window == switcher->get_switcher_window())
+    if(!is_key_down(display, XKeysymToString(XK_Alt_L)))
     {
-        switcher->confirm_choice();
+        SWITCHER->confirm_choice();
     }
-}
-
-
-int WindowManager::OnWMDetected(Display* display, XErrorEvent* event)
-{
-    CHECK_EQ(static_cast<int>(event->error_code), BadAccess);
-    b_wm_detected = true;
-    return 0;
-}
-
-int WindowManager::OnXError(Display* display, XErrorEvent* event)
-{
-    const int MAX_ERROR_TEXT_LEGTH = 1024;
-    char error_text[MAX_ERROR_TEXT_LEGTH];
-
-    XGetErrorText(display, event->error_code, error_text, sizeof(error_text));
-
-    return 0;
 }
 
 
@@ -416,14 +403,14 @@ std::shared_ptr<EshyWMWindow> WindowManager::register_window(Window window, bool
     std::shared_ptr<container> leaf_container = std::make_shared<container>(EOrientation::O_Horizontal, EContainerType::CT_Leaf);
     leaf_container->create_window(window);
     root_container->add_internal_container(leaf_container);
-    taskbar->add_button(leaf_container->get_window());
-    switcher->add_window_option(leaf_container->get_window());
+    TASKBAR->add_button(leaf_container->get_window());
+    SWITCHER->add_window_option(leaf_container->get_window());
     return leaf_container->get_window();
 }
 
-void WindowManager::rescale_windows(uint width, uint height)
+void WindowManager::rescale_windows(uint old_width, uint old_height)
 {
-    
+   
 }
 
 void WindowManager::check_titlebar_button_pressed(Window window, int cursor_x, int cursor_y)

@@ -5,8 +5,6 @@
 
 #include <Imlib2.h>
 
-typedef unsigned long Color;
-
 struct button_color_data
 {
     Color normal;
@@ -47,8 +45,9 @@ class ImageButton : public Button
 {
 public:
 
-    ImageButton(Window parent_window, rect _button_geometry, char* _image_path);
+    ImageButton(Window parent_window, rect _button_geometry, const char* _image_path);
     ImageButton(Window parent_window, rect _button_geometry, Imlib_Image _image);
+    ~ImageButton();
 
     virtual void draw() override;
     virtual void set_position(int x, int y) override;

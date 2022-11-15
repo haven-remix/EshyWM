@@ -2,6 +2,8 @@
 
 #include <X11/Xlib.h>
 
+typedef unsigned long Color;
+
 template <typename T>
 class Vector2D
 {

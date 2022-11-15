@@ -1,32 +1,36 @@
 
 #pragma once
 
+#include "util.h"
+#include "menu_base.h"
 #include "button.h"
 
 #include <memory>
-#include <unordered_map>
+#include <vector>
 
-class EshyWMTaskbar
+struct window_button_pair
+{
+    std::shared_ptr<class EshyWMWindow> window;
+    std::shared_ptr<Button> button;
+};
+
+class EshyWMTaskbar : public EshyWMMenuBase
 {
 public:
 
-    void initialize_taskbar();
+    EshyWMTaskbar(rect _menu_geometry, Color _menu_color);
+    virtual void draw() override;
+
     void update_taskbar_size(uint width, uint height);
-    void raise_taskbar();
-    void draw();
 
     void add_button(std::shared_ptr<class EshyWMWindow> associated_window);
+    void remove_button(std::shared_ptr<class EshyWMWindow> associated_window);
 
     void check_taskbar_button_clicked(int cursor_x, int cursor_y);
 
-    Window get_taskbar_window() const {return taskbar_window;}
-
 private:
 
-    Window taskbar_window;
-    GC graphics_context_internal;
-
-    std::unordered_map<std::shared_ptr<Button>, std::shared_ptr<class EshyWMWindow>> taskbar_buttons;
+    std::vector<window_button_pair> taskbar_buttons;
 
     Window win;
 };

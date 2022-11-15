@@ -12,20 +12,14 @@
 #define TASKBAR               EshyWM::get_taskbar()
 #define SWITCHER              EshyWM::get_switcher()
 #define CONTEXT_MENU          EshyWM::get_context_menu()
+#define RUN_MENU              EshyWM::get_run_menu()
+
+#define DISPLAY_WIDTH         EshyWM::get_window_manager()->get_display_width()             //DisplayWidth(DISPLAY, DefaultScreen(DISPLAY))
+#define DISPLAY_HEIGHT        EshyWM::get_window_manager()->get_display_height()            //DisplayHeight(DISPLAY, DefaultScreen(DISPLAY)) - CONFIG->taskbar_height
 
 #define DISPLAY               EshyWM::get_window_manager()->get_display()
 #define ROOT                  EshyWM::get_window_manager()->get_root()
 #define IS_TILING_MODE()      EshyWM::get_window_manager()->get_manager_data()->b_tiling_mode
-
-struct s_window_desktop_entry_data
-{
-    std::string name;
-    std::string comment;
-    std::string exec_path;
-    std::string icon;
-};
-
-typedef std::unordered_map<std::string, s_window_desktop_entry_data> window_desktop_entry_data_t;
 
 class EshyWM
 {
@@ -49,7 +43,7 @@ public:
     static std::shared_ptr<class EshyWMTaskbar> get_taskbar() {return EshyWM::Get().taskbar;}
     static std::shared_ptr<class EshyWMSwitcher> get_switcher() {return EshyWM::Get().switcher;}
     static std::shared_ptr<class EshyWMContextMenu> get_context_menu() {return EshyWM::Get().context_menu;}
-    window_desktop_entry_data_t get_window_desktop_entry_data() {return window_desktop_entry_data;}
+    static std::shared_ptr<class EshyWMRunMenu> get_run_menu() {return EshyWM::Get().run_menu;}
 
     EshyWM(const EshyWM&) = delete;
 
@@ -62,9 +56,7 @@ private:
     std::shared_ptr<class EshyWMTaskbar> taskbar;
     std::shared_ptr<class EshyWMSwitcher> switcher;
     std::shared_ptr<class EshyWMContextMenu> context_menu;
+    std::shared_ptr<class EshyWMRunMenu> run_menu;
 
-    window_desktop_entry_data_t window_desktop_entry_data;
-
-    void update_window_desktop_entries();
     void update_background(std::string background_path = std::string());
 };

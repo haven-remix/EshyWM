@@ -35,6 +35,12 @@ public:
     uint switcher_button_height;
     ulong switcher_color;
 
+    /**Run menu*/
+    uint run_menu_width;
+    uint run_menu_height;
+    uint run_menu_button_height;
+    ulong run_menu_color;
+
     /**General double click time*/
     ulong double_click_time;
 
@@ -70,6 +76,11 @@ public:
         , switcher_height(500)
         , switcher_button_height(30)
         , switcher_color(0xaeb3bd)
+        //Run menu
+        , run_menu_width(600)
+        , run_menu_height(400)
+        , run_menu_button_height(30)
+        , run_menu_color(0xaeb3bd)
         //General click time
         , double_click_time(500)
         //Background image path

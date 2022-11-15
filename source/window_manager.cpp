@@ -5,6 +5,7 @@
 #include "context_menu.h"
 #include "taskbar.h"
 #include "switcher.h"
+#include "run_menu.h"
 
 #include <X11/Xutil.h>
 #include <glog/logging.h>
@@ -54,10 +55,9 @@ WindowManager::WindowManager()
     imlib_context_set_display(display);
     imlib_context_set_visual(DefaultVisual(display, DefaultScreen(display)));
     imlib_context_set_colormap(DefaultColormap(display, DefaultScreen(display)));
-    imlib_context_set_dither(1);
 
     display_width = DisplayWidth(display, DefaultScreen(display));
-    display_height = DisplayHeight(display, DefaultScreen(display)) - (manager_data->b_tiling_mode ? 0 : CONFIG->taskbar_height);
+    display_height = DisplayHeight(display, DefaultScreen(display)) - CONFIG->taskbar_height;
 }
 
 WindowManager::~WindowManager()
@@ -82,7 +82,7 @@ void WindowManager::initialize()
 
     //Create root container
     root_container = std::make_shared<container>(EOrientation::O_Horizontal, EContainerType::CT_Root);
-    root_container->set_size(display_width, display_height);
+    root_container->set_size(DISPLAY_WIDTH, DISPLAY_HEIGHT);
 }
 
 void WindowManager::handle_preexisting_windows()
@@ -98,9 +98,9 @@ void WindowManager::handle_preexisting_windows()
 
     for(unsigned int i = 0; i < num_top_level_windows; ++i)
     {
-        if(top_level_windows[i] != TASKBAR->get_taskbar_window()
-        && top_level_windows[i] != SWITCHER->get_switcher_window()
-        && top_level_windows[i] != CONTEXT_MENU->get_context_menu_window())
+        if(top_level_windows[i] != TASKBAR->get_menu_window()
+        && top_level_windows[i] != SWITCHER->get_menu_window()
+        && top_level_windows[i] != CONTEXT_MENU->get_menu_window())
         {
             register_window(top_level_windows[i], true);
         }
@@ -135,7 +135,7 @@ void WindowManager::main_loop()
 
     XEvent event;
     XNextEvent(display, &event);
-    
+
     switch (event.type)
     {
     case UnmapNotify:
@@ -185,11 +185,11 @@ void WindowManager::OnConfigureNotify(const XConfigureEvent& event)
 {
     if(event.window == root && event.display == display)
     {
-        const uint previous_width = display_width;
-        const uint previous_height = display_height;
+        const uint previous_width = DISPLAY_WIDTH;
+        const uint previous_height = DISPLAY_HEIGHT;
         display_width = event.width;
-        display_height = event.height - (manager_data->b_tiling_mode ? 0 : CONFIG->taskbar_height);
-        
+        display_height = event.height - CONFIG->taskbar_height;
+     
         //Notify screen resolution changed
         EshyWM::Get().on_screen_resolution_changed(event.width, event.height);
         rescale_windows(previous_width, previous_height);
@@ -245,14 +245,17 @@ void WindowManager::OnMapRequest(const XMapRequestEvent& event)
 
 void WindowManager::OnVisibilityNotify(const XVisibilityEvent& event)
 {
-    if(TASKBAR && event.window == TASKBAR->get_taskbar_window())
+    if(TASKBAR && event.window == TASKBAR->get_menu_window())
     {
-        TASKBAR->raise_taskbar();
+        TASKBAR->raise();
     }
-
-    if(SWITCHER && event.window == SWITCHER->get_switcher_window())
+    else if(SWITCHER && event.window == SWITCHER->get_menu_window())
     {
-        SWITCHER->raise_switcher();
+        SWITCHER->raise();
+    }
+    else if(RUN_MENU && event.window == RUN_MENU->get_menu_window())
+    {
+        RUN_MENU->raise();
     }
 }
 
@@ -261,12 +264,50 @@ void WindowManager::OnButtonPress(const XButtonEvent& event)
     //Pass the click event through
     XAllowEvents(display, ReplayPointer, event.time);
 
-    if(event.window != CONTEXT_MENU->get_context_menu_window())
+    if(event.window == ROOT)
     {
-        CONTEXT_MENU->remove_context_menu();
+        Window returned_root;
+        Window returned_parent;
+        Window* top_level_windows;
+        unsigned int num_top_level_windows;
+        XQueryTree(display, root, &returned_root, &returned_parent, &top_level_windows, &num_top_level_windows);
+
+        bool b_is_above_window = false;
+
+        for(unsigned int i = 0; i < num_top_level_windows; i++)
+        {
+            if(top_level_windows[i] == ROOT)
+            {
+                continue;
+            }
+
+            XWindowAttributes attr;
+            XGetWindowAttributes(DISPLAY, top_level_windows[i], &attr);
+
+            if(event.x_root > attr.x && event.x_root < attr.x + attr.width && event.y_root > attr.y && event.y_root < attr.y + attr.height)
+            {
+                b_is_above_window = true;
+                break;
+            }
+        }
+
+        XFree(top_level_windows);
+
+        if(!b_is_above_window)
+        {
+            CONTEXT_MENU->set_position(event.x, event.y);
+            CONTEXT_MENU->show();
+        }
+
+        return;
     }
 
-    if(event.window == TASKBAR->get_taskbar_window())
+    if(event.window != CONTEXT_MENU->get_menu_window())
+    {
+        CONTEXT_MENU->remove();
+    }
+
+    if(event.window == TASKBAR->get_menu_window())
     {
         TASKBAR->check_taskbar_button_clicked(event.x, event.y);
         return;
@@ -302,7 +343,8 @@ void WindowManager::OnButtonRelease(const XButtonEvent& event)
     {
         if(event.window == root && event.state & Button3Mask)
         {
-            CONTEXT_MENU->show_context_menu(event.x, event.y);
+            CONTEXT_MENU->set_position(event.x, event.y);
+            CONTEXT_MENU->show();
         }
 
         if(frame_list.count(event.window))
@@ -351,10 +393,17 @@ void WindowManager::OnKeyPress(const XKeyEvent& event)
         return;
     }
 
-    if(event.window == root && event.keycode == XKeysymToKeycode(DISPLAY, XK_Tab))
+    if(event.window == root)
     {
-        SWITCHER->show_switcher();
-        SWITCHER->next_option();
+        if(event.keycode == XKeysymToKeycode(DISPLAY, XK_Tab))
+        {
+            SWITCHER->show();
+            SWITCHER->next_option();
+        }
+        else if (event.keycode == XKeysymToKeycode(DISPLAY, XK_R))
+        {
+            RUN_MENU->show();
+        }
     }
 
     CHECK_KEYSYM_TO_KEYCODE(event, XK_C)
@@ -406,6 +455,11 @@ std::shared_ptr<EshyWMWindow> WindowManager::register_window(Window window, bool
     TASKBAR->add_button(leaf_container->get_window());
     SWITCHER->add_window_option(leaf_container->get_window());
     return leaf_container->get_window();
+}
+
+void WindowManager::close_window(std::shared_ptr<class EshyWMWindow> closed_window)
+{
+    TASKBAR->remove_button(closed_window);
 }
 
 void WindowManager::rescale_windows(uint old_width, uint old_height)

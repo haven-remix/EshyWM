@@ -5,45 +5,24 @@
 #include "config.h"
 #include "window.h"
 
-void EshyWMTaskbar::initialize_taskbar()
+EshyWMTaskbar::EshyWMTaskbar(rect _menu_geometry, Color _menu_color) : EshyWMMenuBase(_menu_geometry, _menu_color)
 {
-    const unsigned int height = DisplayHeight(DISPLAY, DefaultScreen(DISPLAY));
-    taskbar_window = XCreateSimpleWindow(
-        DISPLAY,
-        ROOT,
-        0,
-        height - CONFIG->taskbar_height,
-        WINDOW_MANAGER->get_display_width(),
-        CONFIG->taskbar_height,
-        0,
-        0,
-        CONFIG->taskbar_color
-    );
-    XSelectInput(DISPLAY, taskbar_window, SubstructureRedirectMask | SubstructureNotifyMask | VisibilityChangeMask);
-    XGrabButton(DISPLAY, Button1, 0, taskbar_window, false, ButtonPressMask | ButtonReleaseMask, GrabModeSync, GrabModeAsync, None, None);
-    XMapWindow(DISPLAY, taskbar_window);
-
-    graphics_context_internal = XCreateGC(DISPLAY, taskbar_window, 0, 0);
+    XGrabButton(DISPLAY, Button1, AnyModifier, menu_window, false, ButtonPressMask | ButtonReleaseMask, GrabModeAsync, GrabModeAsync, menu_window, None);
 }
 
 void EshyWMTaskbar::update_taskbar_size(uint width, uint height)
 {
-    XMoveWindow(EshyWM::get_window_manager()->get_display(), taskbar_window, 0, height - EshyWM::get_current_config()->taskbar_height);
-    XResizeWindow(EshyWM::get_window_manager()->get_display(), taskbar_window, width, EshyWM::get_current_config()->taskbar_height);
-}
-
-void EshyWMTaskbar::raise_taskbar()
-{
-    XRaiseWindow(DISPLAY, taskbar_window);
+    set_position(0, height - CONFIG->taskbar_height);
+    set_size(width, CONFIG->taskbar_height);
 }
 
 void EshyWMTaskbar::draw()
 {
     int i = 0;
-    for(auto const& [button, window] : taskbar_buttons)
+    for(const window_button_pair& wbp : taskbar_buttons)
     {
-        button->set_position((CONFIG->taskbar_height * i) + 4, 2);
-        button->draw();
+        wbp.button->set_position((CONFIG->taskbar_height * i) + 4, 2);
+        wbp.button->draw();
         i++;
     }
 }
@@ -81,19 +60,31 @@ void EshyWMTaskbar::add_button(std::shared_ptr<EshyWMWindow> associated_window)
     XFree(data_return);
 
     const rect size = {0, 0, EshyWM::get_current_config()->taskbar_height - 4, EshyWM::get_current_config()->taskbar_height - 4};
-    std::shared_ptr<ImageButton> button = std::make_shared<ImageButton>(taskbar_window, size, imlib_create_image_using_data(width, height, img_data));
-    taskbar_buttons.emplace(button, associated_window);
+    std::shared_ptr<ImageButton> button = std::make_shared<ImageButton>(menu_window, size, imlib_create_image_using_data(width, height, img_data));
+    taskbar_buttons.push_back({associated_window, button});
+}
+
+void EshyWMTaskbar::remove_button(std::shared_ptr<EshyWMWindow> associated_window)
+{
+    for(int i = 0; i < taskbar_buttons.size(); i++)
+    {
+        if(taskbar_buttons[i].window == associated_window)
+        {
+            taskbar_buttons.erase(taskbar_buttons.begin() + i);
+            break;
+        }
+    }
 }
 
 
 void EshyWMTaskbar::check_taskbar_button_clicked(int cursor_x, int cursor_y)
 {
-    for(auto const& [button, window] : taskbar_buttons)
+    for(const window_button_pair& wbp : taskbar_buttons)
     {
-        if(button->is_hovered(cursor_x, cursor_y))
+        if(wbp.button->is_hovered(cursor_x, cursor_y))
         {
-            window->minimize_window();
-            XRaiseWindow(EshyWM::get_window_manager()->get_display(), window->get_frame());
+            wbp.window->minimize_window();
+            XRaiseWindow(EshyWM::get_window_manager()->get_display(), wbp.window->get_frame());
             break;
         }
     }

@@ -4,6 +4,7 @@
 #include "context_menu.h"
 #include "taskbar.h"
 #include "switcher.h"
+#include "run_menu.h"
 
 #include <glog/logging.h>
 #include <fstream>
@@ -66,19 +67,20 @@ bool EshyWM::initialize()
     }
 
     window_manager->initialize();
-    update_window_desktop_entries();
 
-    //Create context menu
-    context_menu = std::make_shared<EshyWMContextMenu>();
-    context_menu->initialize_context_menu();
+#define CENTER_W(w)       (DISPLAY_WIDTH - w) / 2
+#define CENTER_H(h)       (DISPLAY_HEIGHT - h) / 2
+
+    context_menu = std::make_shared<EshyWMContextMenu>(rect{0, 0, CONFIG->context_menu_width, 150}, CONFIG->context_menu_color);
+    switcher = std::make_shared<EshyWMSwitcher>(rect{CENTER_W(CONFIG->switcher_width), CENTER_H(CONFIG->switcher_height), CONFIG->switcher_width, CONFIG->switcher_height}, CONFIG->switcher_color);
+    run_menu = std::make_shared<EshyWMRunMenu>(rect{CENTER_W(CONFIG->run_menu_width), CENTER_H(CONFIG->run_menu_height), CONFIG->run_menu_width, CONFIG->run_menu_height}, CONFIG->run_menu_color);
+
+#undef CENTER_W
+#undef CENTER_H
 
     //Create taskbar
-    taskbar = std::make_shared<EshyWMTaskbar>();
-    taskbar->initialize_taskbar();
-
-    //Create switcher
-    switcher = std::make_shared<EshyWMSwitcher>();
-    switcher->initialize_switcher();
+    taskbar = std::make_shared<EshyWMTaskbar>(rect{0, DISPLAY_HEIGHT, DISPLAY_WIDTH, CONFIG->taskbar_height}, CONFIG->taskbar_color);
+    taskbar->show();
 
     window_manager->handle_preexisting_windows();
     for(;;)
@@ -170,46 +172,6 @@ void EshyWM::on_screen_resolution_changed(uint new_width, uint new_height)
     update_background();
 }
 
-
-void EshyWM::update_window_desktop_entries()
-{
-    const std::string global_desktop_entries = "/usr/share/applications";
-    std::string line;
-
-    for(const auto& file_path : std::filesystem::directory_iterator(global_desktop_entries))
-    {
-        if(file_path.path().extension() != ".desktop")
-        {
-            continue;
-        }
-
-        s_window_desktop_entry_data data;
-        std::ifstream file(file_path.path());
-
-        while(std::getline(file, line))
-        {
-            key_value_pair<std::string> kvp = split(line, '=');
-            if(kvp.key == "Name")
-            {
-                data.name = kvp.value;
-            }
-            else if(kvp.key == "Comment")
-            {
-                data.comment = kvp.value;
-            }
-            else if(kvp.key == "Exec")
-            {
-                data.exec_path = kvp.value;
-            }
-            else if(kvp.key == "Icon")
-            {
-                data.icon = kvp.value;
-            }
-        }
-
-        window_desktop_entry_data.emplace(data.name, data);
-    }
-}
 
 void EshyWM::update_background(std::string _background_path)
 {   

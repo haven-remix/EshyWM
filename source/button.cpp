@@ -5,6 +5,7 @@
 #include "config.h"
 
 #include <Imlib2.h>
+#include <X11/Xutil.h>
 
 Button::Button(const Drawable _drawable, const GC _drawable_graphics_context, rect _button_geometry, button_color_data _button_color)
     : drawable(_drawable)
@@ -47,13 +48,13 @@ const bool Button::is_hovered(int cursor_x, int cursor_y) const
 }
 
 
-ImageButton::ImageButton(Window parent_window, rect _button_geometry, char* _image_path)
+ImageButton::ImageButton(Window parent_window, rect _button_geometry, const char* _image_path)
 {
     button_geometry = _button_geometry;
     button_color = {0};
 
     button_image = imlib_load_image(_image_path);
-
+    
     button_window = XCreateSimpleWindow(DISPLAY, parent_window, 0, 0, button_geometry.width, button_geometry.height, 0, 0, 0);
     XSelectInput(DISPLAY, button_window, StructureNotifyMask);
     XMapWindow(DISPLAY, button_window);
@@ -67,16 +68,53 @@ ImageButton::ImageButton(Window parent_window, rect _button_geometry, Imlib_Imag
 
     button_image = _image;
 
-    button_window = XCreateSimpleWindow(DISPLAY, parent_window, 0, 0, button_geometry.width, button_geometry.height, 0, 0, 0);
+    button_window = XCreateSimpleWindow(DISPLAY, parent_window, 0, 0, button_geometry.width, button_geometry.height, 0, 0, 0xff0000);
     XSelectInput(DISPLAY, button_window, StructureNotifyMask);
     XMapWindow(DISPLAY, button_window);
     XSync(DISPLAY, false);
+
+    /**
+    XVisualInfo vinfo;
+    XMatchVisualInfo(DISPLAY, DefaultScreen(DISPLAY), 32, TrueColor, &vinfo);
+    
+    XSetWindowAttributes attr;
+    attr.background_pixel = 0;
+    attr.border_pixel = 0;
+    attr.colormap = XCreateColormap(DISPLAY, ROOT, vinfo.visual, AllocNone);
+
+    button_window = XCreateWindow(
+        DISPLAY,
+        parent_window,
+        0,
+        0,
+        button_geometry.width,
+        button_geometry.height,
+        0,
+        32,
+        InputOutput,
+        vinfo.visual,
+        CWBackPixmap | CWBackPixel | CWBorderPixel,
+        &attr
+    );
+    XSelectInput(DISPLAY, button_window, StructureNotifyMask);
+    XMapWindow(DISPLAY, button_window);
+    XSync(DISPLAY, false);
+    */
+}
+
+ImageButton::~ImageButton()
+{
+    XUnmapWindow(DISPLAY, button_window);
+    
+    imlib_context_set_image(button_image);
+    imlib_free_image();
 }
 
 void ImageButton::draw()
 {
     imlib_context_set_drawable(button_window);
     imlib_context_set_image(button_image);
+    imlib_image_set_has_alpha(1);
     imlib_render_image_on_drawable_at_size(0, 0, button_geometry.width, button_geometry.height);
 }
 

@@ -48,6 +48,8 @@ public:
     void main_loop();
     void handle_preexisting_windows();
 
+    void close_window(std::shared_ptr<class EshyWMWindow> closed_window);
+
     /**Getters*/
     static Display* get_display() {return display;}
     const Window get_root() {return root;}

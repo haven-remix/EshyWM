@@ -5,7 +5,7 @@
 /**
  * Handles everything about an individual window
 */
-class EshyWMWindow
+class EshyWMWindow : public std::enable_shared_from_this<EshyWMWindow>
 {
 public:
 
@@ -43,9 +43,9 @@ public:
     Window get_window() const {return window;}
     Window get_frame() const {return frame;}
     Window get_titlebar() const {return titlebar;}
-    rect get_frame_size_and_location_data() const {return frame_size_and_location_data;}
-    rect get_titlebar_size_and_location_data() const {return titlebar_size_and_location_data;}
-    rect get_window_size_and_location_data() const {return window_size_and_location_data;}
+    rect get_frame_geometry() const {return frame_geometry;}
+    rect get_titlebar_geometry() const {return titlebar_geometry;}
+    rect get_window_geometry() const {return window_geometry;}
     bool is_minimized() const {return b_is_minimized;}
 
 private:
@@ -54,11 +54,11 @@ private:
     Window frame;
     Window titlebar;
 
-    rect frame_size_and_location_data;
-    rect titlebar_size_and_location_data;
-    rect window_size_and_location_data;
-    rect pre_minimize_and_maximize_saved_size_and_location_data;
-    rect temp_move_and_resize_size_and_location_data;
+    rect frame_geometry;
+    rect titlebar_geometry;
+    rect window_geometry;
+    rect pre_minimize_and_maximize_saved_geometry;
+    rect temp_move_and_resize_geometry;
 
     bool b_is_maximized;
     bool b_is_minimized;

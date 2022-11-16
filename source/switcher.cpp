@@ -19,7 +19,7 @@ void EshyWMSwitcher::draw()
     int i = 0;
     for(auto const& [button, window] : switcher_window_options)
     {
-        button->set_position(10, (CONFIG->switcher_button_height * i) + 10);
+        button->set_position(10, (EshyWMConfig::switcher_button_height * i) + 10);
         button->draw();
         i++;
     }
@@ -32,7 +32,7 @@ void EshyWMSwitcher::next_option()
 
 void EshyWMSwitcher::add_window_option(std::shared_ptr<class EshyWMWindow> associated_window)
 {
-    const rect size = {0, 0, CONFIG->switcher_width - 20, CONFIG->switcher_button_height};
+    const rect size = {0, 0, EshyWMConfig::switcher_width - 20, EshyWMConfig::switcher_button_height};
     std::shared_ptr<Button> button = std::make_shared<Button>(menu_window, graphics_context_internal, size);
     switcher_window_options.emplace(button, associated_window);
 }

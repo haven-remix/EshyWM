@@ -12,6 +12,12 @@
 #include <filesystem>
 #include <sstream>
 
+//std::shared_ptr<WindowManager> EshyWM::Internal::window_manager;
+std::shared_ptr<EshyWMTaskbar> EshyWM::Internal::taskbar;
+std::shared_ptr<EshyWMSwitcher> EshyWM::Internal::switcher;
+std::shared_ptr<EshyWMContextMenu> EshyWM::Internal::context_menu;
+std::shared_ptr<EshyWMRunMenu> EshyWM::Internal::run_menu;
+
 enum var_type
 {
     VT_UINT,
@@ -53,91 +59,15 @@ static void parse_config_option(std::string line, var_type type, void* config_va
     }
 }
 
-
-bool EshyWM::initialize()
-{
-    update_config();
-    update_background();
-    run_startup_commands();
-
-    window_manager = WindowManager::Create();
-    if(!window_manager)
-    {
-        return false;
-    }
-
-    window_manager->initialize();
-
-#define CENTER_W(w)       (DISPLAY_WIDTH - w) / 2
-#define CENTER_H(h)       (DISPLAY_HEIGHT - h) / 2
-
-    context_menu = std::make_shared<EshyWMContextMenu>(rect{0, 0, CONFIG->context_menu_width, 150}, CONFIG->context_menu_color);
-    switcher = std::make_shared<EshyWMSwitcher>(rect{CENTER_W(CONFIG->switcher_width), CENTER_H(CONFIG->switcher_height), CONFIG->switcher_width, CONFIG->switcher_height}, CONFIG->switcher_color);
-    run_menu = std::make_shared<EshyWMRunMenu>(rect{CENTER_W(CONFIG->run_menu_width), CENTER_H(CONFIG->run_menu_height), CONFIG->run_menu_width, CONFIG->run_menu_height}, CONFIG->run_menu_color);
-
-#undef CENTER_W
-#undef CENTER_H
-
-    //Create taskbar
-    taskbar = std::make_shared<EshyWMTaskbar>(rect{0, DISPLAY_HEIGHT, DISPLAY_WIDTH, CONFIG->taskbar_height}, CONFIG->taskbar_color);
-    taskbar->show();
-
-    window_manager->handle_preexisting_windows();
-    for(;;)
-    {
-        window_manager->main_loop();
-    }
-    return true;
+static void update_background(const std::string& _background_path = std::string())
+{   
+    const std::string s = _background_path.empty() ? EshyWMConfig::background_path : _background_path;
+    system(("feh --bg-scale " + s).c_str());
 }
 
-void EshyWM::update_config()
+static void run_startup_commands()
 {
-    //Make a config class if there isn't one already
-    if(!get_current_config())
-    {
-        current_config = std::make_shared<EshyWMConfig>();
-    }
-
-    std::ifstream config_file(get_current_config()->get_config_file_path());
-    std::string line;
-
-    while(std::getline(config_file, line))
-    {
-        parse_config_option(line, VT_STRING, &get_current_config()->background_path, "background:", "\"");
-
-        parse_config_option(line, VT_UINT, &get_current_config()->window_frame_border_width, "window_frame_border_width:");
-        parse_config_option(line, VT_UINT, &get_current_config()->window_frame_border_color, "window_frame_border_color:");
-        parse_config_option(line, VT_UINT, &get_current_config()->window_background_color, "window_background_color:");
-
-        parse_config_option(line, VT_UINT, &get_current_config()->titlebar_height, "titlebar_height:");
-        parse_config_option(line, VT_UINT, &get_current_config()->titlebar_button_size, "titlebar_button_size:");
-        parse_config_option(line, VT_UINT, &get_current_config()->titlebar_button_padding, "titlebar_button_padding:");
-        parse_config_option(line, VT_ULONG, &get_current_config()->titlebar_button_normal_color, "titlebar_button_normal_color:");
-        parse_config_option(line, VT_ULONG, &get_current_config()->titlebar_button_hovered_color, "titlebar_button_hovered_color:");
-        parse_config_option(line, VT_ULONG, &get_current_config()->titlebar_button_pressed_color, "titlebar_button_pressed_color:");
-        parse_config_option(line, VT_ULONG, &get_current_config()->titlebar_title_color, "titlebar_title_color:");
-
-        parse_config_option(line, VT_UINT, &get_current_config()->context_menu_width, "context_menu_width:");
-        parse_config_option(line, VT_ULONG, &get_current_config()->context_menu_color, "context_menu_color:");
-        parse_config_option(line, VT_ULONG, &get_current_config()->context_menu_secondary_color, "context_menu_secondary_color:");
-
-        parse_config_option(line, VT_UINT, &get_current_config()->taskbar_height, "taskbar_height:");
-        parse_config_option(line, VT_ULONG, &get_current_config()->taskbar_color, "taskbar_color:");
-
-        parse_config_option(line, VT_UINT, &get_current_config()->switcher_width, "switcher_width:");
-        parse_config_option(line, VT_UINT, &get_current_config()->switcher_height, "switcher_height:");
-        parse_config_option(line, VT_UINT, &get_current_config()->switcher_button_height, "switcher_button_height:");
-        parse_config_option(line, VT_ULONG, &get_current_config()->switcher_color, "switcher_color:");
-
-        parse_config_option(line, VT_ULONG, &get_current_config()->double_click_time, "double_click_time:");
-    }
-
-    config_file.close();
-}
-
-void EshyWM::run_startup_commands()
-{
-    std::ifstream config_file(get_current_config()->get_config_file_path());
+    std::ifstream config_file(EshyWMConfig::get_config_file_path());
     std::string current_command;
     bool b_in_startup_section = false;
 
@@ -163,6 +93,79 @@ void EshyWM::run_startup_commands()
     config_file.close();
 }
 
+static void update_config()
+{
+    std::ifstream config_file(EshyWMConfig::get_config_file_path());
+    std::string line;
+
+    while(std::getline(config_file, line))
+    {
+        parse_config_option(line, VT_STRING, &EshyWMConfig::background_path, "background:", "\"");
+
+        parse_config_option(line, VT_UINT, &EshyWMConfig::window_frame_border_width, "window_frame_border_width:");
+        parse_config_option(line, VT_UINT, &EshyWMConfig::window_frame_border_color, "window_frame_border_color:");
+        parse_config_option(line, VT_UINT, &EshyWMConfig::window_background_color, "window_background_color:");
+
+        parse_config_option(line, VT_UINT, &EshyWMConfig::titlebar_height, "titlebar_height:");
+        parse_config_option(line, VT_UINT, &EshyWMConfig::titlebar_button_size, "titlebar_button_size:");
+        parse_config_option(line, VT_UINT, &EshyWMConfig::titlebar_button_padding, "titlebar_button_padding:");
+        parse_config_option(line, VT_ULONG, &EshyWMConfig::titlebar_button_normal_color, "titlebar_button_normal_color:");
+        parse_config_option(line, VT_ULONG, &EshyWMConfig::titlebar_button_hovered_color, "titlebar_button_hovered_color:");
+        parse_config_option(line, VT_ULONG, &EshyWMConfig::titlebar_button_pressed_color, "titlebar_button_pressed_color:");
+        parse_config_option(line, VT_ULONG, &EshyWMConfig::titlebar_title_color, "titlebar_title_color:");
+
+        parse_config_option(line, VT_UINT, &EshyWMConfig::context_menu_width, "context_menu_width:");
+        parse_config_option(line, VT_ULONG, &EshyWMConfig::context_menu_color, "context_menu_color:");
+        parse_config_option(line, VT_ULONG, &EshyWMConfig::context_menu_secondary_color, "context_menu_secondary_color:");
+
+        parse_config_option(line, VT_UINT, &EshyWMConfig::taskbar_height, "taskbar_height:");
+        parse_config_option(line, VT_ULONG, &EshyWMConfig::taskbar_color, "taskbar_color:");
+
+        parse_config_option(line, VT_UINT, &EshyWMConfig::switcher_width, "switcher_width:");
+        parse_config_option(line, VT_UINT, &EshyWMConfig::switcher_height, "switcher_height:");
+        parse_config_option(line, VT_UINT, &EshyWMConfig::switcher_button_height, "switcher_button_height:");
+        parse_config_option(line, VT_ULONG, &EshyWMConfig::switcher_color, "switcher_color:");
+
+        parse_config_option(line, VT_ULONG, &EshyWMConfig::double_click_time, "double_click_time:");
+    }
+
+    config_file.close();
+}
+
+
+bool EshyWM::initialize()
+{
+    update_config();
+    update_background();
+    run_startup_commands();
+
+    WindowManager::initialize();
+
+    imlib_context_set_display(DISPLAY);
+    imlib_context_set_visual(DefaultVisual(DISPLAY, DefaultScreen(DISPLAY)));
+    imlib_context_set_colormap(DefaultColormap(DISPLAY, DefaultScreen(DISPLAY)));
+
+#define CENTER_W(w)       (DISPLAY_WIDTH - w) / 2
+#define CENTER_H(h)       (DISPLAY_HEIGHT - h) / 2
+
+    Internal::context_menu = std::make_shared<EshyWMContextMenu>(rect{0, 0, EshyWMConfig::context_menu_width, 150}, EshyWMConfig::context_menu_color);
+    Internal::switcher = std::make_shared<EshyWMSwitcher>(rect{CENTER_W(EshyWMConfig::switcher_width), CENTER_H(EshyWMConfig::switcher_height), EshyWMConfig::switcher_width, EshyWMConfig::switcher_height}, EshyWMConfig::switcher_color);
+    Internal::run_menu = std::make_shared<EshyWMRunMenu>(rect{CENTER_W(EshyWMConfig::run_menu_width), CENTER_H(EshyWMConfig::run_menu_height), EshyWMConfig::run_menu_width, EshyWMConfig::run_menu_height}, EshyWMConfig::run_menu_color);
+
+#undef CENTER_W
+#undef CENTER_H
+
+    //Create taskbar
+    Internal::taskbar = std::make_shared<EshyWMTaskbar>(rect{0, DISPLAY_HEIGHT, DISPLAY_WIDTH, EshyWMConfig::taskbar_height}, EshyWMConfig::taskbar_color);
+    Internal::taskbar->show();
+
+    WindowManager::handle_preexisting_windows();
+    for(;;)
+    {
+        WindowManager::main_loop();
+    }
+    return true;
+}
 
 void EshyWM::on_screen_resolution_changed(uint new_width, uint new_height)
 {
@@ -170,13 +173,4 @@ void EshyWM::on_screen_resolution_changed(uint new_width, uint new_height)
 
     //Reset the background to match the screen size
     update_background();
-}
-
-
-void EshyWM::update_background(std::string _background_path)
-{   
-    std::string background_path = _background_path.empty() ? get_current_config()->background_path : _background_path;
-
-    //Reset background
-    system(("feh --bg-scale " + background_path).c_str());
 }

@@ -1,6 +1,7 @@
 
 #include "menu_base.h"
 #include "eshywm.h"
+#include "window_manager.h"
 
 #include <X11/Xutil.h>
 

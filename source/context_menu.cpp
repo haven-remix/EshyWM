@@ -15,7 +15,7 @@ void EshyWMContextMenu::draw()
     int i = 0;
     for(std::shared_ptr<Button> button : context_menu_buttons)
     {
-        button->set_position(10, (CONFIG->switcher_button_height * i) + 10);
+        button->set_position(10, (EshyWMConfig::switcher_button_height * i) + 10);
         button->draw();
         i++;
     }

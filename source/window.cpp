@@ -30,21 +30,21 @@ void EshyWMWindow::frame_window(bool b_was_created_before_window_manager)
         attr.x,
         attr.y,
         attr.width,
-        attr.height + (IS_TILING_MODE() ? 0 : CONFIG->titlebar_height),
-        CONFIG->window_frame_border_width,
-        CONFIG->window_frame_border_color,
-        CONFIG->window_background_color
+        attr.height + (IS_TILING_MODE() ? 0 : EshyWMConfig::titlebar_height),
+        EshyWMConfig::window_frame_border_width,
+        EshyWMConfig::window_frame_border_color,
+        EshyWMConfig::window_background_color
     );
-    XReparentWindow(DISPLAY, window, frame, 0, IS_TILING_MODE() ? 0 : CONFIG->titlebar_height);
+    XReparentWindow(DISPLAY, window, frame, 0, IS_TILING_MODE() ? 0 : EshyWMConfig::titlebar_height);
     XMapWindow(DISPLAY, frame);
 
     if(!IS_TILING_MODE())
     {
-        titlebar = XCreateSimpleWindow(DISPLAY, ROOT, attr.x, attr.y, attr.width, CONFIG->titlebar_height, 0, CONFIG->window_frame_border_color, CONFIG->window_background_color);
+        titlebar = XCreateSimpleWindow(DISPLAY, ROOT, attr.x, attr.y, attr.width, EshyWMConfig::titlebar_height, 0, EshyWMConfig::window_frame_border_color, EshyWMConfig::window_background_color);
         XReparentWindow(DISPLAY, titlebar, frame, 0, 0);
         XMapWindow(DISPLAY, titlebar);
 
-        const rect initial_size = {0, 0, CONFIG->titlebar_button_size, CONFIG->titlebar_button_size};
+        const rect initial_size = {0, 0, EshyWMConfig::titlebar_button_size, EshyWMConfig::titlebar_button_size};
         minimize_button = std::make_shared<ImageButton>(titlebar, initial_size, "../images/minimize_window_normal_image.png");
         maximize_button = std::make_shared<ImageButton>(titlebar, initial_size, "../images/minimize_window_normal_image.png");
         close_button = std::make_shared<ImageButton>(titlebar, initial_size, "../images/close_window_hovered_image.png");
@@ -132,11 +132,11 @@ void EshyWMWindow::minimize_window()
 {
     if(!b_is_minimized)
     {
-        XUnmapWindow(WINDOW_MANAGER->get_display(), frame);
+        XUnmapWindow(DISPLAY, frame);
     }
     else
     {
-        XMapWindow(WINDOW_MANAGER->get_display(), frame);
+        XMapWindow(DISPLAY, frame);
     }
 
     b_is_minimized = !b_is_minimized;
@@ -155,7 +155,7 @@ void EshyWMWindow::maximize_window(bool b_from_move_or_resize)
             w = 1920;
         }
         move_window_absolute(w, 0);
-        resize_window_absolute(DISPLAY_WIDTH - (CONFIG->window_frame_border_width * 2), DISPLAY_HEIGHT - (CONFIG->window_frame_border_width * 2));
+        resize_window_absolute(DISPLAY_WIDTH - (EshyWMConfig::window_frame_border_width * 2), DISPLAY_HEIGHT - (EshyWMConfig::window_frame_border_width * 2));
     }
     else
     {
@@ -200,7 +200,7 @@ void EshyWMWindow::close_window()
         XKillClient(DISPLAY, window);
     }
 
-    WINDOW_MANAGER->close_window(shared_from_this());
+    WindowManager::close_window(shared_from_this());
 }
 
 
@@ -250,7 +250,7 @@ void EshyWMWindow::resize_window_absolute(uint new_size_x, uint new_size_y)
     XResizeWindow(DISPLAY, frame, frame_geometry.width, frame_geometry.height);
 
     window_geometry.width = new_size_x;
-    window_geometry.height = new_size_y - (IS_TILING_MODE() ? 0 : CONFIG->titlebar_height);
+    window_geometry.height = new_size_y - (IS_TILING_MODE() ? 0 : EshyWMConfig::titlebar_height);
     XResizeWindow(DISPLAY, window, window_geometry.width, window_geometry.height);
 
     if(!IS_TILING_MODE())
@@ -297,10 +297,10 @@ void EshyWMWindow::draw()
 
     XClearWindow(DISPLAY, titlebar);
 
-    const int button_y_offset = (CONFIG->titlebar_height - CONFIG->titlebar_button_size) / 2;
+    const int button_y_offset = (EshyWMConfig::titlebar_height - EshyWMConfig::titlebar_button_size) / 2;
     const auto calc_x = [this, button_y_offset](int i)
     {
-        return (get_window_geometry().width - CONFIG->titlebar_button_size * i) - (CONFIG->titlebar_button_padding * (i - 1)) - button_y_offset;
+        return (get_window_geometry().width - EshyWMConfig::titlebar_button_size * i) - (EshyWMConfig::titlebar_button_padding * (i - 1)) - button_y_offset;
     };
 
     //Draw buttons
@@ -315,7 +315,7 @@ void EshyWMWindow::draw()
     XGetWMName(DISPLAY, window, &name);
     
     //Draw title
-    XSetForeground(DISPLAY, graphics_context_internal, CONFIG->titlebar_title_color);
+    XSetForeground(DISPLAY, graphics_context_internal, EshyWMConfig::titlebar_title_color);
     XDrawString(DISPLAY, titlebar, graphics_context_internal, 10, 13, reinterpret_cast<char*>(name.value), name.nitems);
 }
 

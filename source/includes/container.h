@@ -50,7 +50,7 @@ public:
     void move_internal_container(std::shared_ptr<container> container_to_move, int move_amount);
 
     /**Will only run if container_type == CT_Leaf*/
-    std::shared_ptr<class EshyWMWindow> create_window(Window window);
+    std::shared_ptr<class EshyWMWindow> create_window(Window window, XWindowAttributes attr);
 
     void move_window_horizontal_left_arrow();
     void move_window_horizontal_right_arrow();

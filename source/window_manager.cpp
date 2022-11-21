@@ -110,7 +110,7 @@ void OnConfigureRequest(const XConfigureRequestEvent& event)
 
     if(WindowManager::Internal::frame_list.count(event.window))
     {
-        const Window frame = event.window;
+        const Window frame = WindowManager::Internal::frame_list.at(event.window)->get_window()->get_frame();
         XConfigureWindow(DISPLAY, frame, event.value_mask, &changes);
     }
 
@@ -120,9 +120,22 @@ void OnConfigureRequest(const XConfigureRequestEvent& event)
 
 void OnVisibilityNotify(const XVisibilityEvent& event)
 {
-    if(TASKBAR && event.window == TASKBAR->get_menu_window())
+    if(TASKBAR)
     {
-        TASKBAR->raise();
+        if(event.window == TASKBAR->get_menu_window())
+        {
+            TASKBAR->raise();
+        }
+        else
+        {
+            for(const window_button_pair& wbp : TASKBAR->get_taskbar_buttons())
+            {
+                if(wbp.button && wbp.button->get_window() == event.window)
+                {
+                    wbp.button->draw();
+                }
+            }
+        }
     }
     else if(SWITCHER && event.window == SWITCHER->get_menu_window())
     {
@@ -139,44 +152,6 @@ void OnButtonPress(const XButtonEvent& event)
     //Pass the click event through
     XAllowEvents(DISPLAY, ReplayPointer, event.time);
 
-    if(event.window == ROOT)
-    {
-        Window returned_root;
-        Window returned_parent;
-        Window* top_level_windows;
-        unsigned int num_top_level_windows;
-        XQueryTree(DISPLAY, ROOT, &returned_root, &returned_parent, &top_level_windows, &num_top_level_windows);
-
-        bool b_is_above_window = false;
-
-        for(unsigned int i = 0; i < num_top_level_windows; i++)
-        {
-            if(top_level_windows[i] == ROOT)
-            {
-                continue;
-            }
-
-            XWindowAttributes attr;
-            XGetWindowAttributes(DISPLAY, top_level_windows[i], &attr);
-
-            if(event.x_root > attr.x && event.x_root < attr.x + attr.width && event.y_root > attr.y && event.y_root < attr.y + attr.height)
-            {
-                b_is_above_window = true;
-                break;
-            }
-        }
-
-        XFree(top_level_windows);
-
-        if(!b_is_above_window)
-        {
-            CONTEXT_MENU->set_position(event.x, event.y);
-            CONTEXT_MENU->show();
-        }
-
-        return;
-    }
-
     if(event.window != CONTEXT_MENU->get_menu_window())
     {
         CONTEXT_MENU->remove();
@@ -188,25 +163,52 @@ void OnButtonPress(const XButtonEvent& event)
         return;
     }
 
+    if(event.window == ROOT)
+    {
+        bool b_make_context_menu = true;
+        for(auto const& [window, c] : WindowManager::Internal::frame_list)
+        {
+            const rect geo = c->get_window()->get_frame_geometry();
+            if(event.x_root > geo.x && event.x_root < geo.x + geo.width && event.y_root > geo.y && event.y_root < geo.y + geo.height)
+            {
+                b_make_context_menu = false;
+                break;
+            }
+        }
+
+        if(b_make_context_menu)
+        {
+            CONTEXT_MENU->set_position(event.x_root, event.y_root);
+            CONTEXT_MENU->show();
+        }
+
+        return;
+    }
+
     if(WindowManager::Internal::frame_list.count(event.window))
     {
         WindowManager::Internal::frame_list.at(event.window)->get_window()->recalculate_all_window_size_and_location();
+        XSetInputFocus(DISPLAY, WindowManager::Internal::frame_list.at(event.window)->get_window()->get_window(), RevertToPointerRoot, event.time);
     }
     else if (WindowManager::Internal::titlebar_list.count(event.window))
     {
         WindowManager::Internal::titlebar_list.at(event.window)->get_window()->recalculate_all_window_size_and_location();
         WindowManager::check_titlebar_button_pressed(event.window, event.x, event.y);
+        XSetInputFocus(DISPLAY, WindowManager::Internal::titlebar_list.at(event.window)->get_window()->get_window(), RevertToPointerRoot, event.time);
 
-        if(event.time - WindowManager::Internal::titlebar_double_click.first_click_time < EshyWMConfig::double_click_time && WindowManager::Internal::titlebar_double_click.first_click_window == event.window)
-        WindowManager::Internal::titlebar_list.at(event.window)->get_window()->maximize_window();
-        else WindowManager::Internal::titlebar_double_click = {event.window, event.time};
+        if(event.time - WindowManager::Internal::titlebar_double_click.first_click_time < EshyWMConfig::double_click_time
+        && WindowManager::Internal::titlebar_double_click.window == event.window)
+        {
+            WindowManager::Internal::titlebar_list.at(event.window)->get_window()->maximize_window();
+            WindowManager::Internal::titlebar_double_click = {event.window, 0, event.time};
+        }
+        else WindowManager::Internal::titlebar_double_click = {event.window, event.time, 0};
     }
     else return;
 
     //Save cursor position on click
     WindowManager::Internal::click_cursor_position = Vector2D<int>(event.x_root, event.y_root);
     XRaiseWindow(DISPLAY, event.window);
-    XSetInputFocus(DISPLAY, event.window, RevertToPointerRoot, event.time);
 }
 
 void OnButtonRelease(const XButtonEvent& event)
@@ -245,14 +247,10 @@ void OnMotionNotify(const XMotionEvent& event)
            WindowManager::Internal::frame_list.at(event.window)->get_window()->draw();
         }
         else if(event.state & Button3Mask)
-        {
-           WindowManager::Internal::frame_list.at(event.window)->get_window()->resize_window(delta);
-        }
-
-        return;
+        WindowManager::Internal::frame_list.at(event.window)->get_window()->resize_window(delta);
     }
-
-    if(WindowManager::Internal::titlebar_list.count(event.window))
+    else if(WindowManager::Internal::titlebar_list.count(event.window)
+    && event.time - WindowManager::Internal::titlebar_double_click.last_double_click_time > 10)
     {
         WindowManager::Internal::titlebar_list.at(event.window)->get_window()->move_window(delta);
         WindowManager::Internal::titlebar_list.at(event.window)->get_window()->draw();
@@ -319,15 +317,14 @@ void initialize()
     Internal::display_height = DisplayHeight(Internal::display, DefaultScreen(Internal::display)) - EshyWMConfig::taskbar_height;
 
     Internal::manager_data = new window_manager_data();
+    Internal::titlebar_double_click = {0, 0, 0};
 
-    //std::lock_guard<std::mutex> lock(mutex_wm_detected);
     b_window_manager_detected = false;
     XSetErrorHandler(&OnWMDetected);
-    XSelectInput(DISPLAY, ROOT, SubstructureRedirectMask | SubstructureNotifyMask | StructureNotifyMask);
+    XSelectInput(DISPLAY, ROOT, SubstructureRedirectMask | StructureNotifyMask | SubstructureNotifyMask);
     XSync(DISPLAY, false);
     ensure(!b_window_manager_detected)
 
-    //Create root container
     Internal::root_container = std::make_shared<container>(EOrientation::O_Horizontal, EContainerType::CT_Root);
     Internal::root_container->set_size(DISPLAY_WIDTH, DISPLAY_HEIGHT);
 }
@@ -374,6 +371,9 @@ void main_loop()
     case KeyRelease:
         OnKeyRelease(event.xkey);
         break;
+    default:
+        //std::cout << event.type << std::endl;
+        break;
     }
 
     for(auto &[titlebar, container] : Internal::titlebar_list)
@@ -381,7 +381,6 @@ void main_loop()
         container->get_window()->draw();
     }
 
-    TASKBAR->draw();
     SWITCHER->draw();
     CONTEXT_MENU->draw();
 }
@@ -427,7 +426,7 @@ std::shared_ptr<class EshyWMWindow> register_window(Window window, bool b_was_cr
     XAddToSaveSet(DISPLAY, window);
 
     std::shared_ptr<container> leaf_container = std::make_shared<container>(EOrientation::O_Horizontal, EContainerType::CT_Leaf);
-    leaf_container->create_window(window);
+    leaf_container->create_window(window, x_window_attributes);
     Internal::root_container->add_internal_container(leaf_container);
     TASKBAR->add_button(leaf_container->get_window());
     SWITCHER->add_window_option(leaf_container->get_window());
@@ -441,7 +440,16 @@ void close_window(std::shared_ptr<class EshyWMWindow> closed_window)
 
 void rescale_windows(uint old_width, uint old_height)
 {
-
+    // for(auto const& [window, c] : Internal::frame_list)
+    // {
+    //     c->get_window()->recalculate_all_window_size_and_location();
+    //     const int x = c->get_window()->get_frame_geometry().x * (DISPLAY_WIDTH / old_width);
+    //     const int y = c->get_window()->get_frame_geometry().y * (DISPLAY_HEIGHT / old_height);
+    //     const uint width = c->get_window()->get_frame_geometry().width * (DISPLAY_WIDTH / old_width);
+    //     const uint height = c->get_window()->get_frame_geometry().height * (DISPLAY_HEIGHT / old_height);
+    //     c->get_window()->move_window_absolute(x, y);
+    //     c->get_window()->resize_window_absolute(width, height);
+    // }
 }
 
 void check_titlebar_button_pressed(Window window, int cursor_x, int cursor_y)

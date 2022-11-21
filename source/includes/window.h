@@ -15,9 +15,9 @@ public:
         , b_is_minimized(false)
     {}
 
-    void frame_window(bool b_was_created_before_window_manager);
+    void frame_window(XWindowAttributes attr);
     void unframe_window();
-    void setup_grab_events(bool b_was_created_before_window_manager);
+    void setup_grab_events();
     void remove_grab_events();
     void minimize_window();
     void maximize_window(bool b_from_move_or_resize = false);
@@ -33,11 +33,13 @@ public:
     void resize_window_absolute(uint new_size_x, uint new_position_y);
     void motion_modify_ended();
     void recalculate_all_window_size_and_location();
+    void set_size_according_to(uint new_width, uint new_height);
 
     void draw();
 
     /**@return 0 = none; 1 = minimize; 2 = maximize; 3 = close*/
     int is_cursor_on_titlebar_buttons(Window window, int cursor_x, int cursor_y);
+    void update_titlebar_button_positions();
 
     /**Getters*/
     Window get_window() const {return window;}

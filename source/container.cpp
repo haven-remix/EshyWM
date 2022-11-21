@@ -45,7 +45,7 @@ void container::move_internal_container(std::shared_ptr<container> container_to_
 }
 
 
-std::shared_ptr<class EshyWMWindow> container::create_window(Window window)
+std::shared_ptr<class EshyWMWindow> container::create_window(Window window, XWindowAttributes attr)
 {
     if(container_type != EContainerType::CT_Leaf || window_internal)
     {
@@ -53,8 +53,8 @@ std::shared_ptr<class EshyWMWindow> container::create_window(Window window)
     }
 
     window_internal = std::make_shared<EshyWMWindow>(window);
-    window_internal->frame_window(false);
-    window_internal->setup_grab_events(false);
+    window_internal->frame_window(attr);
+    window_internal->setup_grab_events();
 
     return window_internal;
 }

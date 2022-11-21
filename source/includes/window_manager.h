@@ -31,9 +31,12 @@ struct window_manager_data
 
 struct double_click_data
 {
-    Window first_click_window;
+    Window window;
     Time first_click_time;
+    Time last_double_click_time;
 };
+
+class Button;
 
 namespace WindowManager
 {

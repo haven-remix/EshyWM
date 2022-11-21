@@ -56,7 +56,7 @@ ImageButton::ImageButton(Window parent_window, rect _button_geometry, const char
     button_image = imlib_load_image(_image_path);
     
     button_window = XCreateSimpleWindow(DISPLAY, parent_window, 0, 0, button_geometry.width, button_geometry.height, 0, 0, 0);
-    XSelectInput(DISPLAY, button_window, StructureNotifyMask);
+    XSelectInput(DISPLAY, button_window, StructureNotifyMask | VisibilityChangeMask);
     XMapWindow(DISPLAY, button_window);
     XSync(DISPLAY, false);
 }
@@ -69,7 +69,7 @@ ImageButton::ImageButton(Window parent_window, rect _button_geometry, Imlib_Imag
     button_image = _image;
 
     button_window = XCreateSimpleWindow(DISPLAY, parent_window, 0, 0, button_geometry.width, button_geometry.height, 0, 0, 0xff0000);
-    XSelectInput(DISPLAY, button_window, StructureNotifyMask);
+    XSelectInput(DISPLAY, button_window, StructureNotifyMask | VisibilityChangeMask);
     XMapWindow(DISPLAY, button_window);
     XSync(DISPLAY, false);
 

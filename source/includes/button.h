@@ -53,6 +53,8 @@ public:
     virtual void set_position(int x, int y) override;
     virtual void set_size(uint width, uint height) override;
 
+    const Window get_window() const {return button_window;}
+
 protected:
 
     Imlib_Image button_image;

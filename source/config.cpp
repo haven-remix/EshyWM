@@ -1,7 +1,7 @@
 #include "config.h"
 
 //Window frame
-uint EshyWMConfig::window_frame_border_width = 2;
+uint EshyWMConfig::window_frame_border_width = 1;
 ulong EshyWMConfig::window_frame_border_color = 0x3d3a5c;
 ulong EshyWMConfig::window_background_color = 0x15141f;
 //Titlebar

@@ -7,7 +7,6 @@
 #include <memory>
 #include <iostream>
 
-//#define WINDOW_MANAGER        EshyWM::Internal::window_manager
 #define TASKBAR               EshyWM::Internal::taskbar
 #define SWITCHER              EshyWM::Internal::switcher
 #define CONTEXT_MENU          EshyWM::Internal::context_menu
@@ -22,7 +21,6 @@
 
 #define ensure(s)             if(!(s)) abort();
 
-//class WindowManager;
 class EshyWMTaskbar;
 class EshyWMSwitcher;
 class EshyWMContextMenu;
@@ -35,7 +33,6 @@ namespace EshyWM
 
 namespace Internal
 {
-    //extern std::shared_ptr<WindowManager> window_manager;
     extern std::shared_ptr<EshyWMTaskbar> taskbar;
     extern std::shared_ptr<EshyWMSwitcher> switcher;
     extern std::shared_ptr<EshyWMContextMenu> context_menu;

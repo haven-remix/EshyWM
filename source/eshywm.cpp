@@ -12,7 +12,6 @@
 #include <filesystem>
 #include <sstream>
 
-//std::shared_ptr<WindowManager> EshyWM::Internal::window_manager;
 std::shared_ptr<EshyWMTaskbar> EshyWM::Internal::taskbar;
 std::shared_ptr<EshyWMSwitcher> EshyWM::Internal::switcher;
 std::shared_ptr<EshyWMContextMenu> EshyWM::Internal::context_menu;
@@ -60,7 +59,7 @@ static void parse_config_option(std::string line, var_type type, void* config_va
 }
 
 static void update_background(const std::string& _background_path = std::string())
-{   
+{
     const std::string s = _background_path.empty() ? EshyWMConfig::background_path : _background_path;
     system(("feh --bg-scale " + s).c_str());
 }
@@ -103,8 +102,8 @@ static void update_config()
         parse_config_option(line, VT_STRING, &EshyWMConfig::background_path, "background:", "\"");
 
         parse_config_option(line, VT_UINT, &EshyWMConfig::window_frame_border_width, "window_frame_border_width:");
-        parse_config_option(line, VT_UINT, &EshyWMConfig::window_frame_border_color, "window_frame_border_color:");
-        parse_config_option(line, VT_UINT, &EshyWMConfig::window_background_color, "window_background_color:");
+        parse_config_option(line, VT_ULONG, &EshyWMConfig::window_frame_border_color, "window_frame_border_color:");
+        parse_config_option(line, VT_ULONG, &EshyWMConfig::window_background_color, "window_background_color:");
 
         parse_config_option(line, VT_UINT, &EshyWMConfig::titlebar_height, "titlebar_height:");
         parse_config_option(line, VT_UINT, &EshyWMConfig::titlebar_button_size, "titlebar_button_size:");
@@ -126,6 +125,11 @@ static void update_config()
         parse_config_option(line, VT_UINT, &EshyWMConfig::switcher_button_height, "switcher_button_height:");
         parse_config_option(line, VT_ULONG, &EshyWMConfig::switcher_color, "switcher_color:");
 
+        parse_config_option(line, VT_UINT, &EshyWMConfig::run_menu_width, "run_menu_width:");
+        parse_config_option(line, VT_UINT, &EshyWMConfig::run_menu_height, "run_menu_height:");
+        parse_config_option(line, VT_UINT, &EshyWMConfig::run_menu_button_height, "run_menu_button_height:");
+        parse_config_option(line, VT_ULONG, &EshyWMConfig::run_menu_color, "run_menu_color:");
+
         parse_config_option(line, VT_ULONG, &EshyWMConfig::double_click_time, "double_click_time:");
     }
 
@@ -136,8 +140,8 @@ static void update_config()
 bool EshyWM::initialize()
 {
     update_config();
-    update_background();
     run_startup_commands();
+    update_background();
 
     WindowManager::initialize();
 

@@ -1,5 +1,6 @@
 
 #include "util.h"
+#include "window_manager.h"
 
 #ifdef __LOGGING_ENABLED
 
@@ -17,14 +18,6 @@ void __log_message(LogSeverity severity, char* message, ...)
 {
     LOG_SEVERITY_CHECK(severity)
     std::cout << message << std::endl;
-	LOG_FATAL_CHECK(severity)
-}
-
-template <typename T>
-void __log_vector(LogSeverity severity, Vector2D<T> vector)
-{
-	LOG_SEVERITY_CHECK(severity)
-	std::cout << "(" << vector.x << ", " << vector.y << ")" << std::endl;
 	LOG_FATAL_CHECK(severity)
 }
 
@@ -155,3 +148,52 @@ void __log_event_info(LogSeverity severity, XEvent event)
 	LOG_FATAL_CHECK(severity)
 }
 #endif
+
+bool majority_monitor(rect window_geometry, std::shared_ptr<s_monitor_info>& monitor_info)
+{
+    for(std::shared_ptr<s_monitor_info> monitor : WindowManager::monitors)
+    {
+        const int window_center = window_geometry.x + (window_geometry.width / 2);
+        if(window_center > monitor->x && window_center < monitor->x + monitor->width)
+        {
+            monitor_info = monitor;
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool position_in_monitor(int x, int y, std::shared_ptr<s_monitor_info>* monitor_info)
+{
+	for(std::shared_ptr<s_monitor_info> monitor : WindowManager::monitors)
+    {
+        if(x >= monitor->x && x <= monitor->x + monitor->width && y >= monitor->y && y <= monitor->y + monitor->height)
+        {
+			if(monitor_info)
+            	*monitor_info = monitor;
+            return true;
+        }
+    }
+
+    return false;
+}
+
+
+void set_window_transparency(Window window, float transparency)
+{
+	const std::string command = "transset-df " + std::to_string(transparency) + " --id " + std::to_string(window);
+	system(command.c_str());
+}
+
+void increment_window_transparency(Window window, float transparency)
+{
+	const std::string command = "transset-df --id " + std::to_string(window) + " --inc " + std::to_string(transparency);
+	system(command.c_str());
+}
+
+void decrement_window_transparency(Window window, float transparency)
+{
+	const std::string command = "transset-df --id " + std::to_string(window) + " --dec " + std::to_string(transparency);
+	system(command.c_str());
+}

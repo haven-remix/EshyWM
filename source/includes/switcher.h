@@ -16,6 +16,7 @@ public:
     virtual void show() override;
     virtual void raise(bool b_set_focus = false) override;
     void update_button_positions();
+    void update_switcher_window_options();
     void button_clicked(int x_root, int y_root);
 
     void add_window_option(std::shared_ptr<class EshyWMWindow> associated_window, const Imlib_Image& icon);

@@ -89,8 +89,11 @@ void WindowButton::on_update_state()
 
 ImageButton::~ImageButton()
 {
-    imlib_context_set_image(button_image);
-    imlib_free_image();
+    if(!b_using_preloaded_image)
+    {
+        imlib_context_set_image(button_image);
+        imlib_free_image();
+    }
 }
 
 void ImageButton::draw()

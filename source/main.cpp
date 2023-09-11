@@ -4,7 +4,7 @@
 
 int main(int argc, char** argv)
 {
-    /**SET_GLOBAL_SEVERITY(LS_Warning);
+    SET_GLOBAL_SEVERITY(LS_Warning);
 
     for(int i = 0; i < argc; i++)
     {
@@ -18,7 +18,7 @@ int main(int argc, char** argv)
             SET_GLOBAL_SEVERITY(LS_Error)
         else if(!strcmp(argv[i], "--logging=fatal"))
             SET_GLOBAL_SEVERITY(LS_Fatal)
-    }*/
+    }
 
     return EshyWM::initialize();
 }

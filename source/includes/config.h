@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <vector>
 
 namespace EshyWMConfig
 {
@@ -12,6 +13,8 @@ namespace EshyWMConfig
     extern std::string minimize_button_image_path;
     extern std::string maximize_button_image_path;
     extern std::string close_button_image_path;
+
+    extern float window_opacity_step;
 
     /**Titlebar*/
     extern uint titlebar_height;
@@ -32,9 +35,10 @@ namespace EshyWMConfig
     extern uint taskbar_height;
     extern ulong taskbar_color;
     extern ulong taskbar_button_hovered_color;
+    extern std::string default_application_image_path;
 
     /**Switcher*/
-    extern uint switcher_button_width;
+    extern uint switcher_button_height;
     extern uint switcher_button_padding;
     extern ulong switcher_button_color;
     extern ulong switcher_button_border_color;
@@ -52,5 +56,9 @@ namespace EshyWMConfig
     /**Background image path*/
     extern std::string background_path;
 
+    extern std::vector<std::string> startup_commands;
+
     std::string get_config_file_path();
+
+    void update_config();
 };

@@ -91,9 +91,12 @@ public:
     ImageButton(Window parent_window, const rect& _button_geometry, const button_color_data& _background_color, const Imlib_Image& _image)
         : WindowButton(parent_window, _button_geometry, _background_color)
         , button_image(_image)
+        , b_using_preloaded_image(true)
     {}
     ImageButton(Window parent_window, const rect& _button_geometry, const button_color_data& _background_color, const char* _image_path)
-        : ImageButton(parent_window, _button_geometry, _background_color, imlib_load_image(_image_path))
+        : WindowButton(parent_window, _button_geometry, _background_color)
+        , button_image(imlib_load_image(_image_path))
+        , b_using_preloaded_image(false)
     {}
     ~ImageButton();
 
@@ -103,4 +106,6 @@ public:
 protected:
 
     Imlib_Image button_image;
+
+    bool b_using_preloaded_image;
 };

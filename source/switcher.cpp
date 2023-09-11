@@ -11,15 +11,17 @@
 #include <cairo/cairo-xlib.h>
 #include <algorithm>
 #include <string.h>
+#include <cmath>
 
-const int get_button_x_position(const int i)
+static const int get_button_x_position(const int i)
 {
-    return ((EshyWMConfig::switcher_button_width + EshyWMConfig::switcher_button_padding) * i) + EshyWMConfig::switcher_button_padding;
-}
-
-const uint height_from_width(const uint width)
-{
-    return (9 * width) / 16;
+    int x = EshyWMConfig::switcher_button_padding;
+    for(int j = 0; j < i; ++j)
+    {
+        x += SWITCHER->get_switcher_window_options()[j].button->get_button_geometry().width;
+        x += EshyWMConfig::switcher_button_padding;
+    }
+    return x;
 }
 
 
@@ -63,10 +65,18 @@ void EshyWMSwitcher::button_clicked(int x_root, int y_root)
 
 void EshyWMSwitcher::update_button_positions()
 {
-    const uint width = (EshyWMConfig::switcher_button_width * switcher_window_options.size()) + (EshyWMConfig::switcher_button_padding * (switcher_window_options.size() + 1));
-    const uint height = height_from_width(EshyWMConfig::switcher_button_width) + (EshyWMConfig::switcher_button_padding * 2);
+    uint width = EshyWMConfig::switcher_button_padding;
+    for(window_button_pair pair : switcher_window_options)
+    {
+        width += pair.button->get_button_geometry().width;
+        width += EshyWMConfig::switcher_button_padding;
+    }
+
+    const uint height = EshyWMConfig::switcher_button_height + (EshyWMConfig::switcher_button_padding * 2);
+    
     set_size(width, height);
-    set_position(CENTER_W(width), CENTER_H(height));
+    set_position(CENTER_W(WindowManager::monitors[0], width), CENTER_H(WindowManager::monitors[0], height));
+    
     for(int i = 0; i < switcher_window_options.size(); i++)
     {
         switcher_window_options[i].button->set_position(get_button_x_position(i), EshyWMConfig::switcher_button_padding);
@@ -74,15 +84,32 @@ void EshyWMSwitcher::update_button_positions()
     }
 }
 
+void EshyWMSwitcher::update_switcher_window_options()
+{
+    std::vector<window_button_pair> old_switcher_window_options = switcher_window_options;
+
+    switcher_window_options.clear();
+
+    for(std::shared_ptr<EshyWMWindow> window : WindowManager::window_list)
+    {
+        for(window_button_pair pair : old_switcher_window_options)
+        {
+            if(pair.window == window)
+                switcher_window_options.push_back(pair);
+        }
+    }   
+}
+
 
 void EshyWMSwitcher::add_window_option(std::shared_ptr<EshyWMWindow> associated_window, const Imlib_Image& icon)
 {
-    XWindowAttributes window_attributes;
-    XGetWindowAttributes(DISPLAY, associated_window->get_window(), &window_attributes);
-    int width = window_attributes.width;
-    int height = window_attributes.height;
+    imlib_context_set_image(icon);
+    const int height = imlib_image_get_height();
+    const int width = imlib_image_get_width();
 
-    const rect size = {0, 0, EshyWMConfig::switcher_button_width, height_from_width(EshyWMConfig::switcher_button_width)};
+    const float scale = 140.0f / height;
+
+    const rect size = {0, 0, (uint)std::round(width * scale), (uint)std::round(height * scale)};
     const button_color_data color = {EshyWMConfig::switcher_button_color, EshyWMConfig::switcher_button_color, EshyWMConfig::switcher_button_color};
 
     std::shared_ptr<ImageButton> button = std::make_shared<ImageButton>(menu_window, size, color, icon);
@@ -146,10 +173,8 @@ void EshyWMSwitcher::handle_option_chosen(const int i)
 
     if(switcher_window_options[i].window->get_frame() != top_level_windows[num_top_level_windows - 1])
     {
-        if(switcher_window_options[i].window->is_minimized())
-        {
-            WindowManager::_minimize_window(switcher_window_options[i].window);
-        }
+        if(switcher_window_options[i].window->get_window_state() == WS_MINIMIZED)
+            switcher_window_options[i].window->minimize_window(false);
 
         XRaiseWindow(DISPLAY, switcher_window_options[i].window->get_frame());
         XSetInputFocus(DISPLAY, switcher_window_options[i].window->get_window(), RevertToPointerRoot, CurrentTime);

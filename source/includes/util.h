@@ -3,15 +3,14 @@
 #include <X11/Xlib.h>
 #include <iostream>
 #include <sstream>
+#include <cmath>
+#include <window_manager.h>
 
 //Force enable logging
 //#define __LOGGING_ENABLED
 
 #define ensure(s)             if(!(s)) abort();
 #define safe_ensure(s)        if(!(s)) return;
-
-template <typename T>
-class Vector2D;
 
 #ifdef __LOGGING_ENABLED
 	enum LogSeverity : uint8_t
@@ -37,7 +36,7 @@ class Vector2D;
 	#define LOG_VECTOR(severity, vector)		std::cout << "(" << vector.x << ", " << vector.y << ")" << std::endl;
 #else
 #ifndef __LOGGING_ENABLED
-	#define SET_GLOBAL_SEVERITY(severity)
+	#define SET_GLOBAL_SEVERITY(severity) ;
 	#define LOG(severity, message)
 	#define LOG_EVENT_INFO(severity, event)
 	#define LOG_VECTOR(severity, vector)
@@ -46,38 +45,8 @@ class Vector2D;
 
 typedef unsigned long Color;
 
-#define CENTER_W(w)       (int)((DISPLAY_WIDTH(0) - w) / 2)
-#define CENTER_H(h)       (int)((DISPLAY_HEIGHT(0) - h) / 2)
-
-template <typename T>
-class Vector2D
-{
-public:
-	T x;
-	T y;
-
-	Vector2D<T> operator+(const Vector2D<T>& a)
-	{
-		return Vector2D<T>(x + a.x, y + a.y);
-	}
-
-	Vector2D<T> operator-(const Vector2D<T>& a)
-	{
-		return Vector2D<T>(x - a.x, y - a.y);
-	}
-
-	void operator+=(const Vector2D<T>& a)
-	{
-		x += a.x;
-		y += a.y;
-	}
-
-	void operator-=(const Vector2D<T>& a)
-	{
-		x -= a.x;
-		y -= a.y;
-	}
-};
+#define CENTER_W(monitor, w)       (int)((monitor->width - w) / 2)
+#define CENTER_H(monitor, h)       (int)std::round(((float)((monitor->height - EshyWMConfig::taskbar_height) - h) / 2.0f))
 
 struct rect
 {
@@ -86,3 +55,10 @@ struct rect
 	uint width;
 	uint height;
 };
+
+extern bool majority_monitor(rect window_geometry, std::shared_ptr<struct s_monitor_info>& monitor_info);
+extern bool position_in_monitor(int x, int y, std::shared_ptr<struct s_monitor_info>* monitor_info);
+
+extern void set_window_transparency(Window window, float transparency);
+extern void increment_window_transparency(Window window, float transparency);
+extern void decrement_window_transparency(Window window, float transparency);

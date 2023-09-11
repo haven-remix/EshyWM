@@ -1,5 +1,9 @@
 #include "config.h"
 
+#include <fstream>
+#include <iostream>
+#include <cstring>
+
 //Window frame
 uint EshyWMConfig::window_frame_border_width = 10;
 ulong EshyWMConfig::window_frame_border_color = 0x3d3a5c;
@@ -8,6 +12,7 @@ ulong EshyWMConfig::close_button_color = 0xdb5353;
 std::string EshyWMConfig::minimize_button_image_path = "";
 std::string EshyWMConfig::maximize_button_image_path = "";
 std::string EshyWMConfig::close_button_image_path = "";
+float EshyWMConfig::window_opacity_step = 0.1;
 //Titlebar
 uint EshyWMConfig::titlebar_height = 26;
 uint EshyWMConfig::titlebar_button_size = 26;
@@ -25,8 +30,9 @@ ulong EshyWMConfig::context_menu_secondary_color = 0x222222;
 uint EshyWMConfig::taskbar_height = 30;
 ulong EshyWMConfig::taskbar_color = 0x283140;
 ulong EshyWMConfig::taskbar_button_hovered_color = 0x42516b;
+std::string EshyWMConfig::default_application_image_path = "";
 //Switcher
-uint EshyWMConfig::switcher_button_width = 250;
+uint EshyWMConfig::switcher_button_height = 140;
 uint EshyWMConfig::switcher_button_padding = 20;
 ulong EshyWMConfig::switcher_button_color = 0x888888;
 ulong EshyWMConfig::switcher_button_border_color = 0x444444;
@@ -41,7 +47,119 @@ ulong EshyWMConfig::double_click_time = 500;
 //Background image path
 std::string EshyWMConfig::background_path = "";
 
-std::string EshyWMConfig::get_config_file_path()
+std::vector<std::string> EshyWMConfig::startup_commands;
+
+enum VarType
 {
-    return std::string(getenv("HOME")) + "/.config" + "/eshywm.conf";
+    VT_UINT,
+    VT_UINT_HEX,
+    VT_ULONG,
+    VT_ULONG_HEX,
+    VT_FLOAT,
+    VT_STRING
+};
+
+struct key_value_pair
+{
+    std::string key;
+    std::string value;
+};
+
+static void parse_config_option(std::string line, VarType type, void* config_var, std::string option_name, std::string start_location = " ")
+{
+    if(line.find(option_name) != std::string::npos)
+    {
+        const size_t pos = line.find(': ');
+        const key_value_pair kvp = {line.substr(0, pos).c_str(), line.substr(pos + 1, line.length() - pos).c_str()};
+
+        switch(type)
+        {
+        case VarType::VT_UINT:
+            *((uint*)config_var) = std::stoi(kvp.value);
+            break;
+        case VarType::VT_UINT_HEX:
+            *((uint*)config_var) = std::stoi(kvp.value, 0, 16);
+            break;
+        case VarType::VT_ULONG:
+            *((ulong*)config_var) = std::stoul(kvp.value);
+            break;
+        case VarType::VT_ULONG_HEX:
+            *((ulong*)config_var) = std::stoul(kvp.value, 0, 16);
+            break;
+        case VarType::VT_FLOAT:
+            *((float*)config_var) = std::stoi(kvp.value);
+            break;
+        case VarType::VT_STRING:
+            *(std::string*)config_var = kvp.value;
+            break;
+        };
+    }
+}
+
+void EshyWMConfig::update_config()
+{
+    std::ifstream config_file(std::string(getenv("HOME")) + "/.config/eshywm/eshywm.conf");
+    std::string line;
+
+    std::string startup_command;
+
+    while(std::getline(config_file, line))
+    {
+        if(line.find("#") != std::string::npos)
+            continue;
+
+        parse_config_option(line, VT_STRING, &startup_command, "startup_command:");
+
+        if(!startup_command.empty())
+        {
+            startup_commands.push_back(startup_command);
+            startup_command = "";
+            continue;
+        }
+
+        parse_config_option(line, VT_STRING, &background_path, "background:", "\"");
+
+        parse_config_option(line, VT_UINT, &window_frame_border_width, "window_frame_border_width:");
+        parse_config_option(line, VT_ULONG_HEX, &window_frame_border_color, "window_frame_border_color:");
+        parse_config_option(line, VT_ULONG_HEX, &window_background_color, "window_background_color:");
+        parse_config_option(line, VT_ULONG_HEX, &close_button_color, "close_button_color:");
+        parse_config_option(line, VT_STRING, &minimize_button_image_path, "minimize_button_image_path");
+        parse_config_option(line, VT_STRING, &maximize_button_image_path, "maximize_button_image_path");
+        parse_config_option(line, VT_STRING, &close_button_image_path, "close_button_image_path");
+
+        parse_config_option(line, VT_FLOAT, &window_opacity_step, "window_opacity_step:");
+
+        parse_config_option(line, VT_UINT, &titlebar_height, "titlebar_height:");
+        parse_config_option(line, VT_UINT, &titlebar_button_size, "titlebar_button_size:");
+        parse_config_option(line, VT_UINT, &titlebar_button_padding, "titlebar_button_padding:");
+        parse_config_option(line, VT_ULONG_HEX, &titlebar_button_normal_color, "titlebar_button_normal_color:");
+        parse_config_option(line, VT_ULONG_HEX, &titlebar_button_hovered_color, "titlebar_button_hovered_color:");
+        parse_config_option(line, VT_ULONG_HEX, &titlebar_button_pressed_color, "titlebar_button_pressed_color:");
+        parse_config_option(line, VT_ULONG_HEX, &titlebar_title_color, "titlebar_title_color:");
+
+        parse_config_option(line, VT_UINT, &context_menu_width, "context_menu_width:");
+        parse_config_option(line, VT_UINT, &context_menu_button_height, "context_menu_button_height:");
+        parse_config_option(line, VT_ULONG_HEX, &context_menu_color, "context_menu_color:");
+        parse_config_option(line, VT_ULONG_HEX, &context_menu_secondary_color, "context_menu_secondary_color:");
+
+        parse_config_option(line, VT_UINT, &taskbar_height, "taskbar_height:");
+        parse_config_option(line, VT_ULONG_HEX, &taskbar_color, "taskbar_color:");
+        parse_config_option(line, VT_ULONG_HEX, &taskbar_button_hovered_color, "taskbar_button_hovered_color:");
+        parse_config_option(line, VT_STRING, &default_application_image_path, "default_application_image_path:");
+
+        parse_config_option(line, VT_ULONG, &switcher_button_height, "switcher_button_height:");
+        parse_config_option(line, VT_ULONG, &switcher_button_padding, "switcher_button_padding:");
+        parse_config_option(line, VT_ULONG_HEX, &switcher_button_color, "switcher_button_color:");
+        parse_config_option(line, VT_ULONG_HEX, &switcher_button_border_color, "switcher_button_border_color:");
+        parse_config_option(line, VT_ULONG_HEX, &switcher_color, "switcher_color:");
+
+        parse_config_option(line, VT_UINT, &run_menu_width, "run_menu_width:");
+        parse_config_option(line, VT_UINT, &run_menu_height, "run_menu_height:");
+        parse_config_option(line, VT_UINT, &run_menu_button_height, "run_menu_button_height:");
+        parse_config_option(line, VT_ULONG_HEX, &run_menu_color, "run_menu_color:");
+
+        parse_config_option(line, VT_ULONG, &double_click_time, "double_click_time:");
+    }
+
+    config_file.close();
 }

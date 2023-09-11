@@ -9,9 +9,10 @@
 #include "button.h"
 
 #include <X11/Xutil.h>
+#include <X11/Xatom.h>
 #include <X11/extensions/Xrandr.h>
+
 #include <cstring>
-#include <iostream>
 #include <algorithm>
 
 #define CHECK_KEYSYM_PRESSED(event, key_sym)                    if(event.keycode == XKeysymToKeycode(DISPLAY, key_sym))
@@ -19,21 +20,29 @@
 #define CHECK_KEYSYM_AND_MOD_PRESSED(event, mod, key_sym)       if(event.state & mod && event.keycode == XKeysymToKeycode(DISPLAY, key_sym))
 #define ELSE_CHECK_KEYSYM_AND_MOD_PRESSED(event, mod, key_sym)  else if(event.state & mod && event.keycode == XKeysymToKeycode(DISPLAY, key_sym))
 
+using namespace std::chrono_literals;
+
 Display* WindowManager::display;
 std::vector<std::shared_ptr<EshyWMWindow>> WindowManager::window_list;
-std::vector<s_monitor_info> WindowManager::monitor_info;
+std::vector<std::shared_ptr<s_monitor_info>> WindowManager::monitors;
 
-static Vector2D<int> click_cursor_position;
+static struct Vector2D
+{
+	int x;
+	int y;
+} click_cursor_position;
+
 static struct double_click_data
 {
     Window window;
     Time first_click_time;
     Time last_double_click_time;
 } titlebar_double_click;
+
+static bool b_manipulating_with_keys = false;
+
 static std::shared_ptr<Button> currently_hovered_button;
 static rect manipulating_window_geometry;
-
-static void* b_window_manager_detected = malloc(sizeof(bool));
 
 std::shared_ptr<EshyWMWindow> window_list_contains_frame(Window frame)
 {
@@ -86,30 +95,27 @@ void remove_from_window_list(std::shared_ptr<EshyWMWindow> window)
 }
 
 
-void update_monitor_info()
+static void update_monitor_info()
 {
     int n_monitors;
-    XRRMonitorInfo* monitors = XRRGetMonitors(DISPLAY, ROOT, false, &n_monitors);
+    XRRMonitorInfo* found_monitors = XRRGetMonitors(DISPLAY, ROOT, false, &n_monitors);
+
+    WindowManager::monitors.clear();
 
     for(int i = 0; i < n_monitors; i++)
     {
-        if(i < WindowManager::monitor_info.size())
-        {
-            WindowManager::monitor_info[i] = {(bool)monitors[i].primary, monitors[i].x, monitors[i].y, (uint)monitors[i].width, (uint)monitors[i].height};
-        }
-        else WindowManager::monitor_info.push_back({(bool)monitors[i].primary, monitors[i].x, monitors[i].y, (uint)monitors[i].width, (uint)monitors[i].height});
+        std::shared_ptr<s_monitor_info> monitor_info = std::make_shared<s_monitor_info>((bool)found_monitors[i].primary, found_monitors[i].x, found_monitors[i].y, (uint)found_monitors[i].width, (uint)found_monitors[i].height);
+        WindowManager::monitors.push_back(monitor_info);
     }
 
-    XRRFreeMonitors(monitors);
+    XRRFreeMonitors(found_monitors);
 }
 
-std::shared_ptr<EshyWMWindow> register_window(Window window, bool b_was_created_before_window_manager)
+static std::shared_ptr<EshyWMWindow> register_window(Window window, bool b_was_created_before_window_manager)
 {
     //Do not frame already framed windows
     if(window_list_contains_window(window))
-    {
         return nullptr;
-    }
     
     //Retrieve attributes of window to frame
     XWindowAttributes x_window_attributes = {0};
@@ -117,12 +123,28 @@ std::shared_ptr<EshyWMWindow> register_window(Window window, bool b_was_created_
 
     //If window was created before window manager started, we should frame it only if it is visible and does not set override_redirect
     if(b_was_created_before_window_manager && (x_window_attributes.override_redirect || x_window_attributes.map_state != IsViewable))
-    {
         return nullptr;
-    }
 
     //Add so we can restore if we crash
     XAddToSaveSet(DISPLAY, window);
+
+    //Center window, when creating we want to center it on the monitor the cursor is in
+    Window window_return;
+    int root_x;
+    int root_y;
+    int others;
+    uint mask_return;
+
+    XQueryPointer(DISPLAY, ROOT, &window_return, &window_return, &root_x, &root_y, &others, &others, &mask_return);
+
+    std::shared_ptr<s_monitor_info> monitor;
+    if(position_in_monitor(root_x, root_y, &monitor))
+    {
+        x_window_attributes.width = std::min((int)(monitor->width * 0.9f), x_window_attributes.width);
+        x_window_attributes.height = std::min((int)((monitor->height - EshyWMConfig::taskbar_height) * 0.9f), x_window_attributes.height);
+        x_window_attributes.x = std::clamp(CENTER_W(monitor, x_window_attributes.width), monitor->x, (int)(monitor->x + monitor->width) / 2);
+        x_window_attributes.y = std::clamp(CENTER_H(monitor, x_window_attributes.height), monitor->y, (int)(monitor->y + monitor->height) / 2);
+    }
 
     //Create window
     std::shared_ptr<EshyWMWindow> new_window = std::make_shared<EshyWMWindow>(window, false);
@@ -130,50 +152,15 @@ std::shared_ptr<EshyWMWindow> register_window(Window window, bool b_was_created_
     new_window->setup_grab_events();
     WindowManager::window_list.push_back(new_window);
 
-    Imlib_Image icon;
+    for(std::shared_ptr<s_monitor_info> monitor : WindowManager::monitors)
+        monitor->taskbar->add_button(new_window, new_window->get_window_icon());
 
-    //Try to retrieve icon from application
-    static const Atom ATOM_NET_WM_ICON = XInternAtom(DISPLAY, "_NET_WM_ICON", false);
-    static const Atom ATOM_CARDINAL = XInternAtom(DISPLAY, "CARDINAL", false);
-
-    Atom type_return;
-    int format_return;
-    unsigned long nitems_return;
-    unsigned long bytes_after_return;
-    unsigned char* data_return = nullptr;
-
-    XGetWindowProperty(DISPLAY, window, ATOM_NET_WM_ICON, 0, 1, false, ATOM_CARDINAL, &type_return, &format_return, &nitems_return, &bytes_after_return, &data_return);
-    if (data_return)
-    {
-        const int width = *(unsigned int*)data_return;
-        XFree(data_return);
-
-        XGetWindowProperty(DISPLAY, window, ATOM_NET_WM_ICON, 1, 1, false, ATOM_CARDINAL, &type_return, &format_return, &nitems_return, &bytes_after_return, &data_return);
-        const int height = *(unsigned int*)data_return;
-        XFree(data_return);
-
-        XGetWindowProperty(DISPLAY, window, ATOM_NET_WM_ICON, 2, width * height, false, ATOM_CARDINAL, &type_return, &format_return, &nitems_return, &bytes_after_return, &data_return);
-        uint32_t* img_data = new uint32_t[width * height];
-        const ulong* ul = (ulong*)data_return;
-
-        for(int i = 0; i < nitems_return; i++)
-        {
-            img_data[i] = (uint32_t)ul[i];
-        }
-
-        XFree(data_return);
-
-        icon = imlib_create_image_using_data(width, height, img_data);
-    }
-    else icon = imlib_load_image("../images/application_icon.png");
-
-    TASKBAR->add_button(new_window, icon);
-    SWITCHER->add_window_option(new_window, icon);
+    SWITCHER->add_window_option(new_window, new_window->get_window_icon());
     return new_window;
 }
 
 
-void handle_button_hovered(Window hovered_window, bool b_hovered, int mode)
+static void handle_button_hovered(Window hovered_window, bool b_hovered, int mode)
 {
     if (currently_hovered_button)
     {
@@ -197,14 +184,15 @@ void handle_button_hovered(Window hovered_window, bool b_hovered, int mode)
         if(currently_hovered_button)
             currently_hovered_button->set_button_state(EButtonState::S_Normal);
 
-        for(std::shared_ptr<WindowButton>& button : TASKBAR->get_taskbar_buttons())
-        {
-            if(button->get_window() == hovered_window)
+        for(std::shared_ptr<s_monitor_info> monitor : WindowManager::monitors)
+            for(std::shared_ptr<WindowButton>& button : monitor->taskbar->get_taskbar_buttons())
             {
-                currently_hovered_button = button;
-                break;
+                if(button->get_window() == hovered_window)
+                {
+                    currently_hovered_button = button;
+                    break;
+                }
             }
-        }
 
         if(!currently_hovered_button)
             for(std::shared_ptr<EshyWMWindow>& window : WindowManager::window_list)
@@ -226,17 +214,23 @@ void handle_button_hovered(Window hovered_window, bool b_hovered, int mode)
 }
 
 
-void OnDestroyNotify(const XDestroyWindowEvent& event)
+static void OnDestroyNotify(const XDestroyWindowEvent& event)
 {
     if(std::shared_ptr<EshyWMWindow> window = window_list_contains_frame(event.window))
     {
-        TASKBAR->remove_button(window);
+        for(std::shared_ptr<s_monitor_info> monitor : WindowManager::monitors)
+            monitor->taskbar->remove_button(window);
         SWITCHER->remove_window_option(window);
         remove_from_window_list(window);
     }
 }
 
-void OnUnmapNotify(const XUnmapEvent& event)
+static void OnMapNotify(const XMapEvent& event)
+{
+    
+}
+
+static void OnUnmapNotify(const XUnmapEvent& event)
 {
     safe_ensure(event.event != ROOT);
 
@@ -255,16 +249,14 @@ void OnUnmapNotify(const XUnmapEvent& event)
     }
 }
 
-void OnMapRequest(const XMapRequestEvent& event)
-{
+static void OnMapRequest(const XMapRequestEvent& event)
+{    
     register_window(event.window, false);
-    //Map window
     XMapWindow(DISPLAY, event.window);
-    //Make sure focus is on the mapped window
     XSetInputFocus(DISPLAY, event.window, RevertToPointerRoot, CurrentTime);
 }
 
-void OnConfigureNotify(const XConfigureEvent& event)
+static void OnConfigureNotify(const XConfigureEvent& event)
 {
     if(event.window == ROOT && event.display == DISPLAY)
     {
@@ -275,7 +267,7 @@ void OnConfigureNotify(const XConfigureEvent& event)
     }
 }
 
-void OnConfigureRequest(const XConfigureRequestEvent& event)
+static void OnConfigureRequest(const XConfigureRequestEvent& event)
 {
     XWindowChanges changes;
     changes.x = event.x;
@@ -286,33 +278,34 @@ void OnConfigureRequest(const XConfigureRequestEvent& event)
     changes.sibling = event.above;
     changes.stack_mode = event.detail;
 
-    if(std::shared_ptr<EshyWMWindow> window = window_list_contains_frame(event.window))
+    if (std::shared_ptr<EshyWMWindow> window = window_list_contains_window(event.window))
     {
-        const Window frame = window->get_frame();
-        XConfigureWindow(DISPLAY, frame, event.value_mask, &changes);
+        //If inner window is moving than move frame to represent that movement instead
+        changes.y -= EshyWMConfig::titlebar_height;
+        XConfigureWindow(DISPLAY, window->get_frame(), event.value_mask, &changes);
     }
-
-    //Grant request
-    XConfigureWindow(DISPLAY, event.window, event.value_mask, &changes);
+    else
+        XConfigureWindow(DISPLAY, event.window, event.value_mask, &changes);
 }
 
-void OnVisibilityNotify(const XVisibilityEvent& event)
+static void OnVisibilityNotify(const XVisibilityEvent& event)
 {
-    if(TASKBAR)
-    {
-        if(event.window == TASKBAR->get_menu_window())
-            TASKBAR->raise();
-        else
+    for(std::shared_ptr<s_monitor_info> monitor : WindowManager::monitors)
+        if(monitor->taskbar)
         {
-            for(const std::shared_ptr<WindowButton>& button : TASKBAR->get_taskbar_buttons())
+            if(event.window == monitor->taskbar->get_menu_window())
+                monitor->taskbar->raise();
+            else
             {
-                if(button && button->get_window() == event.window)
+                for(const std::shared_ptr<WindowButton>& button : monitor->taskbar->get_taskbar_buttons())
                 {
-                    button->draw();
+                    if(button && button->get_window() == event.window)
+                    {
+                        button->draw();
+                    }
                 }
             }
         }
-    }
 
     if(SWITCHER && event.window == SWITCHER->get_menu_window())
         SWITCHER->raise();
@@ -322,11 +315,11 @@ void OnVisibilityNotify(const XVisibilityEvent& event)
         window->update_titlebar();
 }
 
-void OnButtonPress(const XButtonEvent& event)
+static void OnButtonPress(const XButtonEvent& event)
 {
     //Pass the click event through
     XAllowEvents(DISPLAY, ReplayPointer, event.time);
-    
+
     if(event.window != CONTEXT_MENU->get_menu_window())
     {
         CONTEXT_MENU->remove();
@@ -362,27 +355,16 @@ void OnButtonPress(const XButtonEvent& event)
 
     if(std::shared_ptr<EshyWMWindow> fwindow = window_list_contains_frame(event.window))
     {
-        fwindow->recalculate_all_window_size_and_location();
-        XSetInputFocus(DISPLAY, fwindow->get_window(), RevertToPointerRoot, event.time);
+        EshyWMWindow::focus_window(fwindow);
         manipulating_window_geometry = fwindow->get_frame_geometry();
-    }
-    else if(std::shared_ptr<EshyWMWindow> wwindow = window_list_contains_window(event.window))
-    {
-        wwindow->recalculate_all_window_size_and_location();
-        XSetInputFocus(DISPLAY, wwindow->get_window(), RevertToPointerRoot, event.time);
-        manipulating_window_geometry = wwindow->get_frame_geometry();
     }
     else if (std::shared_ptr<EshyWMWindow> twindow = window_list_contains_titlebar(event.window))
     {
-        twindow->recalculate_all_window_size_and_location();
-        XSetInputFocus(DISPLAY, twindow->get_window(), RevertToPointerRoot, event.time);
-        manipulating_window_geometry = twindow->get_frame_geometry();
-
         //Handle double click for maximize in the titlebar
         if(titlebar_double_click.window == event.window
         && event.time - titlebar_double_click.first_click_time < EshyWMConfig::double_click_time)
         {
-            WindowManager::_maximize_window(twindow);
+            twindow->maximize_window(true);
             titlebar_double_click = {event.window, 0, event.time};
         }
         else titlebar_double_click = {event.window, event.time, 0};
@@ -394,7 +376,7 @@ void OnButtonPress(const XButtonEvent& event)
     XRaiseWindow(DISPLAY, event.window);
 }
 
-void OnButtonRelease(const XButtonEvent& event)
+static void OnButtonRelease(const XButtonEvent& event)
 {
     //Pass the click event through
     XAllowEvents(DISPLAY, ReplayPointer, event.time);
@@ -403,34 +385,29 @@ void OnButtonRelease(const XButtonEvent& event)
         currently_hovered_button->click();
 }
 
-void OnMotionNotify(const XMotionEvent& event)
+static void OnMotionNotify(const XMotionEvent& event)
 {
-    const Vector2D<int> delta = {event.x_root - click_cursor_position.x, event.y_root - click_cursor_position.y};
+    const Vector2D delta = {event.x_root - click_cursor_position.x, event.y_root - click_cursor_position.y};
 
-    std::shared_ptr<EshyWMWindow> fwindow = window_list_contains_frame(event.window);
-    std::shared_ptr<EshyWMWindow> twindow = window_list_contains_titlebar(event.window);
-    std::shared_ptr<EshyWMWindow> wwindow = window_list_contains_window(event.window);
-    if(fwindow && event.state & Mod4Mask && event.state & ShiftMask)
-    {        
+    std::shared_ptr<EshyWMWindow> window = window_list_contains_frame(event.window);
+    if(window && event.state & Mod4Mask)
+    {
         if(event.state & Button1Mask)
-            fwindow->move_window_absolute(manipulating_window_geometry.x + delta.x, manipulating_window_geometry.y + delta.y);
+            window->move_window_absolute(manipulating_window_geometry.x + delta.x, manipulating_window_geometry.y + delta.y);
         else if(event.state & Button3Mask)
-            fwindow->resize_window_absolute(std::max((int)manipulating_window_geometry.width + delta.x, 10), std::max((int)manipulating_window_geometry.height + delta.y, 10));
+            window->resize_window_absolute(std::max((int)manipulating_window_geometry.width + delta.x, 10), std::max((int)manipulating_window_geometry.height + delta.y, 10));
     }
-    if(wwindow && event.state & Mod4Mask && event.state & ShiftMask)
-    {        
-        if(event.state & Button1Mask)
-            wwindow->move_window_absolute(manipulating_window_geometry.x + delta.x, manipulating_window_geometry.y + delta.y);
-        else if(event.state & Button3Mask)
-            wwindow->resize_window_absolute(std::max((int)manipulating_window_geometry.width + delta.x, 10), std::max((int)manipulating_window_geometry.height + delta.y, 10));
+    else if(window = window_list_contains_titlebar(event.window))
+    {
+        if(window && event.time - titlebar_double_click.last_double_click_time > 10)
+            window->move_window_absolute(manipulating_window_geometry.x + delta.x, manipulating_window_geometry.y + delta.y);
     }
-    else if(twindow && event.time - titlebar_double_click.last_double_click_time > 10)
-        twindow->move_window_absolute(manipulating_window_geometry.x + delta.x, manipulating_window_geometry.y + delta.y);
 }
 
-void OnKeyPress(const XKeyEvent& event)
+static void OnKeyPress(const XKeyEvent& event)
 {
     std::shared_ptr<EshyWMWindow> window = window_list_contains_frame(event.window);
+
     if(event.window == ROOT)
     {
         CHECK_KEYSYM_AND_MOD_PRESSED(event, Mod1Mask, XK_Tab)
@@ -440,28 +417,71 @@ void OnKeyPress(const XKeyEvent& event)
         }
         ELSE_CHECK_KEYSYM_AND_MOD_PRESSED(event, Mod4Mask, XK_R)
 	    system("rofi -show drun");
+        ELSE_CHECK_KEYSYM_AND_MOD_PRESSED(event, Mod4Mask, XK_e | XK_E)
+        EshyWM::b_terminate = true;
     }
     else if(event.state & Mod4Mask && window)
     {
+        b_manipulating_with_keys = true;
+
         CHECK_KEYSYM_PRESSED(event, XK_C)
-        WindowManager::_close_window(window);
+        EshyWMWindow::close_window(window);
         ELSE_CHECK_KEYSYM_PRESSED(event, XK_d | XK_D)
-        WindowManager::_maximize_window(window);
+        EshyWMWindow::toggle_maximize(window);
         ELSE_CHECK_KEYSYM_PRESSED(event, XK_f | XK_F)
-        WindowManager::_fullscreen_window(window);
+        EshyWMWindow::toggle_fullscreen(window);
         ELSE_CHECK_KEYSYM_PRESSED(event, XK_a | XK_A)
-        WindowManager::_minimize_window(window);
+        EshyWMWindow::toggle_minimize(window);
+        ELSE_CHECK_KEYSYM_PRESSED(event, XK_Left)
+        window->anchor_window(WS_ANCHORED_LEFT);
+        ELSE_CHECK_KEYSYM_PRESSED(event, XK_Up)
+        window->anchor_window(WS_ANCHORED_UP);
+        ELSE_CHECK_KEYSYM_PRESSED(event, XK_Right)
+        window->anchor_window(WS_ANCHORED_RIGHT);
+        ELSE_CHECK_KEYSYM_PRESSED(event, XK_Down)
+        window->anchor_window(WS_ANCHORED_DOWN);
+        ELSE_CHECK_KEYSYM_PRESSED(event, XK_o | XK_O)
+        increment_window_transparency(event.window, EshyWMConfig::window_opacity_step);
+        ELSE_CHECK_KEYSYM_PRESSED(event, XK_i | XK_I)
+        decrement_window_transparency(event.window, EshyWMConfig::window_opacity_step);
     }
 
-    XAllowEvents(DISPLAY, ReplayKeyboard, event.time);
+    XAllowEvents(DISPLAY, ReplayKeyboard, event.time);        
 }
 
-void OnKeyRelease(const XKeyEvent& event)
+static void OnKeyRelease(const XKeyEvent& event)
 {
     if(event.window == ROOT && SWITCHER && SWITCHER->get_menu_active())
     {
         CHECK_KEYSYM_PRESSED(event, XK_Alt_L)
         SWITCHER->confirm_choice();
+    }
+
+    b_manipulating_with_keys = false;
+}
+
+static void OnEnterNotify(const XCrossingEvent& event)
+{
+    if(std::shared_ptr<EshyWMWindow> window = window_list_contains_frame(event.window))
+    {
+        if(!b_manipulating_with_keys)
+            window->focus_window(window);
+    }
+    else
+        handle_button_hovered(event.window, true, event.mode);
+}
+
+static void OnClientMessage(const XClientMessageEvent& event)
+{
+    static Atom ATOM_FULLSCREEN = XInternAtom(DISPLAY, "_NET_WM_STATE_FULLSCREEN", False);
+    static Atom ATOM_STATE = XInternAtom(DISPLAY, "_NET_WM_STATE", False);
+
+    if(std::shared_ptr<EshyWMWindow> window = window_list_contains_window(event.window))
+    {
+        if(event.message_type == ATOM_STATE && (event.data.l[1] == ATOM_FULLSCREEN || event.data.l[2] == ATOM_FULLSCREEN))
+        {
+            EshyWMWindow::toggle_fullscreen(window);
+        }
     }
 }
 
@@ -471,6 +491,8 @@ void initialize()
 {
     display = XOpenDisplay(nullptr);
     ensure(display)
+
+    static void* b_window_manager_detected = calloc(1, sizeof(bool));
 
     auto OnWMDetected = [](Display* display, XErrorEvent* event)
     {
@@ -483,61 +505,73 @@ void initialize()
     XSelectInput(DISPLAY, ROOT, SubstructureRedirectMask | StructureNotifyMask | SubstructureNotifyMask);
     XSync(DISPLAY, false);
     ensure(!(*(bool*)(b_window_manager_detected)))
-    b_window_manager_detected = malloc(0);
+    free(b_window_manager_detected);
+
+    XGrabKey(DISPLAY, XKeysymToKeycode(DISPLAY, XK_e | XK_E), AnyModifier, ROOT, false, GrabModeAsync, GrabModeSync);
 
     update_monitor_info();
     titlebar_double_click = {0, 0, 0};
 }
 
-void main_loop()
+void handle_events()
 {
-    XEvent event;
-    XNextEvent(DISPLAY, &event);
-    LOG_EVENT_INFO(LS_Verbose, event)
-    
-    switch (event.type)
+    static XEvent event;
+
+    while(XEventsQueued(DISPLAY, QueuedAfterFlush) != 0)
     {
-    case DestroyNotify:
-        OnDestroyNotify(event.xdestroywindow);
-        break;
-    case MapRequest:
-        OnMapRequest(event.xmaprequest);
-        break;
-    case UnmapNotify:
-        OnUnmapNotify(event.xunmap);
-        break;
-    case ConfigureNotify:
-        OnConfigureNotify(event.xconfigure);
-        break;
-    case ConfigureRequest:
-        OnConfigureRequest(event.xconfigurerequest);
-        break;
-    case VisibilityNotify:
-        OnVisibilityNotify(event.xvisibility);
-        break;
-    case ButtonPress:
-        OnButtonPress(event.xbutton);
-        break;
-    case ButtonRelease:
-        OnButtonRelease(event.xbutton);
-        break;
-    case MotionNotify:
-        while (XCheckTypedWindowEvent(DISPLAY, event.xmotion.window, MotionNotify, &event)) {}
-        OnMotionNotify(event.xmotion);
-        break;
-    case KeyPress:
-        OnKeyPress(event.xkey);
-        break;
-    case KeyRelease:
-        OnKeyRelease(event.xkey);
-        break;
-    case EnterNotify:
-        handle_button_hovered(event.xcrossing.window, true, event.xcrossing.mode);
-        break;
-    case LeaveNotify:
-        handle_button_hovered(event.xcrossing.window, false, event.xcrossing.mode);
-        break;
-    };
+        XNextEvent(DISPLAY, &event);
+        LOG_EVENT_INFO(LS_Verbose, event)
+        
+        switch (event.type)
+        {
+        case DestroyNotify:
+            OnDestroyNotify(event.xdestroywindow);
+            break;
+        case MapRequest:
+            OnMapRequest(event.xmaprequest);
+            break;
+        case MapNotify:
+            OnMapNotify(event.xmap);
+            break;
+        case UnmapNotify:
+            OnUnmapNotify(event.xunmap);
+            break;
+        case ConfigureNotify:
+            OnConfigureNotify(event.xconfigure);
+            break;
+        case ConfigureRequest:
+            OnConfigureRequest(event.xconfigurerequest);
+            break;
+        case VisibilityNotify:
+            OnVisibilityNotify(event.xvisibility);
+            break;
+        case ButtonPress:
+            OnButtonPress(event.xbutton);
+            break;
+        case ButtonRelease:
+            OnButtonRelease(event.xbutton);
+            break;
+        case MotionNotify:
+            while (XCheckTypedWindowEvent(DISPLAY, event.xmotion.window, MotionNotify, &event)) {}
+            OnMotionNotify(event.xmotion);
+            break;
+        case KeyPress:
+            OnKeyPress(event.xkey);
+            break;
+        case KeyRelease:
+            OnKeyRelease(event.xkey);
+            break;
+        case EnterNotify:
+            OnEnterNotify(event.xcrossing);
+            break;
+        case LeaveNotify:
+            handle_button_hovered(event.xcrossing.window, false, event.xcrossing.mode);
+            break;
+        case ClientMessage:
+            OnClientMessage(event.xclient);
+            break;
+        };
+    }
 }
 
 void handle_preexisting_windows()
@@ -561,8 +595,18 @@ void handle_preexisting_windows()
 
     for(unsigned int i = 0; i < num_top_level_windows; ++i)
     {
-        if(top_level_windows[i] != TASKBAR->get_menu_window()
-        && top_level_windows[i] != SWITCHER->get_menu_window()
+        bool b_continue = false;
+        for(std::shared_ptr<s_monitor_info> monitor : WindowManager::monitors)
+            if(monitor->taskbar->get_menu_window() == top_level_windows[i])
+            {
+                b_continue = true;
+                break;
+            }
+
+        if(b_continue)
+            continue;
+
+        if(top_level_windows[i] != SWITCHER->get_menu_window()
         && top_level_windows[i] != CONTEXT_MENU->get_menu_window())
         {
             register_window(top_level_windows[i], true);

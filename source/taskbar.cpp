@@ -5,9 +5,12 @@
 #include "config.h"
 #include "window.h"
 #include "button.h"
+#include "system.h"
 
 #include <algorithm>
-#include <string.h>
+#include <string>
+#include <cstring>
+#include <format>
 
 #include <X11/Xatom.h>
 #include <cairo/cairo-xlib.h>
@@ -22,15 +25,13 @@ void on_taskbar_button_clicked(std::shared_ptr<EshyWMWindow> window, void* null)
 
     if(window->get_frame() != top_level_windows[num_top_level_windows - 1])
     {
-        if(window->is_minimized())
-        {
-            WindowManager::_minimize_window(window);
-        }
+        if(window->get_window_state() == WS_MINIMIZED)
+            EshyWMWindow::toggle_minimize(window);
 
         XRaiseWindow(DISPLAY, window->get_frame());
         window->update_titlebar();
     }
-    else WindowManager::_minimize_window(window);
+    else EshyWMWindow::toggle_minimize(window);
 
     XFree(top_level_windows);
 }
@@ -38,12 +39,21 @@ void on_taskbar_button_clicked(std::shared_ptr<EshyWMWindow> window, void* null)
 
 EshyWMTaskbar::EshyWMTaskbar(rect _menu_geometry, Color _menu_color) : EshyWMMenuBase(_menu_geometry, _menu_color)
 {
-    const char* class_name = "eshywm_taskbar\0taaskbar";
+    const char* class_name = "eshywm_taskbar\0taskbar";
     Atom ATOM_CLASS = XInternAtom(DISPLAY, "WM_CLASS", False);
     XChangeProperty(DISPLAY, menu_window, ATOM_CLASS, XA_STRING, 8, PropModeReplace, reinterpret_cast<const unsigned char*>(class_name), strlen(class_name));
     XFlush(DISPLAY);
 
     XGrabButton(DISPLAY, Button1, AnyModifier, menu_window, false, ButtonPressMask | ButtonReleaseMask, GrabModeAsync, GrabModeAsync, menu_window, None);
+
+    cairo_taskbar_surface = cairo_xlib_surface_create(DISPLAY, menu_window, DefaultVisual(DISPLAY, 0), menu_geometry.width, menu_geometry.height);
+    cairo_context = cairo_create(cairo_taskbar_surface);
+}
+
+EshyWMTaskbar::~EshyWMTaskbar()
+{
+    cairo_destroy(cairo_context);
+    cairo_surface_destroy(cairo_taskbar_surface);
 }
 
 void EshyWMTaskbar::update_taskbar_size(uint width, uint height)
@@ -51,7 +61,7 @@ void EshyWMTaskbar::update_taskbar_size(uint width, uint height)
     set_position(0, height - EshyWMConfig::taskbar_height);
     set_size(width, EshyWMConfig::taskbar_height);
 
-    display_time();
+    display_system_info();
 }
 
 void EshyWMTaskbar::update_button_positions()
@@ -84,7 +94,7 @@ void EshyWMTaskbar::add_button(std::shared_ptr<EshyWMWindow> associated_window, 
     taskbar_buttons.push_back(button);
     update_button_positions();
 
-    display_time();
+    display_system_info();
 }
 
 void EshyWMTaskbar::remove_button(std::shared_ptr<EshyWMWindow> associated_window)
@@ -101,17 +111,19 @@ void EshyWMTaskbar::remove_button(std::shared_ptr<EshyWMWindow> associated_windo
 }
 
 
-void EshyWMTaskbar::display_time()
+void EshyWMTaskbar::display_system_info()
 {
-    cairo_taskbar_surface = cairo_xlib_surface_create(DISPLAY, menu_window, DefaultVisual(DISPLAY, 0), menu_geometry.width, menu_geometry.height);
-    cairo_context = cairo_create(cairo_taskbar_surface);
+    XClearWindow(DISPLAY, menu_window);
 
     cairo_select_font_face(cairo_context, "Lato", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_NORMAL);
-    cairo_set_font_size(cairo_context, 20);
+    cairo_set_font_size(cairo_context, 16);
     cairo_set_source_rgb(cairo_context, 1.0f, 1.0f, 1.0f);
-    cairo_move_to(cairo_context, menu_geometry.width - 100.0f, EshyWMConfig::taskbar_height * 0.6);
-    cairo_show_text(cairo_context, "Time");
+    
+    cairo_move_to(cairo_context, menu_geometry.width - 50.0f, EshyWMConfig::taskbar_height * 0.6);
+    const std::string battery_percentage = std::to_string(EshyWM::system_info->battery_percentage) + "%";
+    cairo_show_text(cairo_context, battery_percentage.c_str());
 
-    cairo_destroy(cairo_context);
-    cairo_surface_destroy(cairo_taskbar_surface);
+    cairo_move_to(cairo_context, menu_geometry.width - 150.0f, EshyWMConfig::taskbar_height * 0.6);
+    const auto time = std::chrono::zoned_time("America/Los_Angeles", EshyWM::system_info->current_time);
+    cairo_show_text(cairo_context, std::format("{:%r}", time).c_str());
 }

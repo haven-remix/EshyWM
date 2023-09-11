@@ -6,6 +6,7 @@
 
 enum EWindowState : uint8_t
 {
+    WS_NONE,
     WS_NORMAL,
     WS_MINIMIZED,
     WS_MAXIMIZED,
@@ -22,7 +23,8 @@ enum EWindowStateChangeCondition : uint8_t
     WSCC_FROM_MOVE,
     WSCC_FROM_RESIZE,
     WSCC_FROM_MAXIMIZE,
-    WSCC_FROM_FULLSCREEN
+    WSCC_FROM_FULLSCREEN,
+    WSCC_STORE_STATE
 };
 
 /**
@@ -80,6 +82,7 @@ public:
 
     rect frame_geometry;
     rect pre_state_change_geometry;
+    EWindowState previous_state;
 
     std::shared_ptr<s_monitor_info> current_monitor;
 

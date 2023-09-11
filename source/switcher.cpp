@@ -46,8 +46,8 @@ void EshyWMSwitcher::show()
 
 void EshyWMSwitcher::raise(bool b_set_focus)
 {
-    EshyWMMenuBase::raise(b_set_focus);
     update_button_positions();
+    EshyWMMenuBase::raise(b_set_focus);
 }
 
 void EshyWMSwitcher::button_clicked(int x_root, int y_root)
@@ -75,7 +75,20 @@ void EshyWMSwitcher::update_button_positions()
     const uint height = EshyWMConfig::switcher_button_height + (EshyWMConfig::switcher_button_padding * 2);
     
     set_size(width, height);
-    set_position(CENTER_W(WindowManager::monitors[0], width), CENTER_H(WindowManager::monitors[0], height));
+
+    Window window_return;
+    int root_x;
+    int root_y;
+    int others;
+    uint mask_return;
+
+    XQueryPointer(DISPLAY, ROOT, &window_return, &window_return, &root_x, &root_y, &others, &others, &mask_return);
+
+    std::shared_ptr<s_monitor_info> monitor;
+    if(position_in_monitor(root_x, root_y, &monitor))
+        set_position(CENTER_W(monitor, width), CENTER_H(monitor, height));
+    else
+        set_position(CENTER_W(WindowManager::monitors[0], width), CENTER_H(WindowManager::monitors[0], height));
     
     for(int i = 0; i < switcher_window_options.size(); i++)
     {

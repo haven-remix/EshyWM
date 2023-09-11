@@ -45,8 +45,8 @@
 
 typedef unsigned long Color;
 
-#define CENTER_W(monitor, w)       (int)((monitor->width - w) / 2)
-#define CENTER_H(monitor, h)       (int)std::round(((float)((monitor->height - EshyWMConfig::taskbar_height) - h) / 2.0f))
+#define CENTER_W(monitor, w)       (int)(monitor->x + ((monitor->width - w) / 2))
+#define CENTER_H(monitor, h)       (int)std::round(monitor->y + ((float)((monitor->height - EshyWMConfig::taskbar_height) - h) / 2.0f))
 
 struct rect
 {

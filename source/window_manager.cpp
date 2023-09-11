@@ -477,12 +477,8 @@ static void OnClientMessage(const XClientMessageEvent& event)
     static Atom ATOM_STATE = XInternAtom(DISPLAY, "_NET_WM_STATE", False);
 
     if(std::shared_ptr<EshyWMWindow> window = window_list_contains_window(event.window))
-    {
         if(event.message_type == ATOM_STATE && (event.data.l[1] == ATOM_FULLSCREEN || event.data.l[2] == ATOM_FULLSCREEN))
-        {
-            EshyWMWindow::toggle_fullscreen(window);
-        }
-    }
+            window->fullscreen_window(event.data.l[0], event.data.l[0] ? WSCC_STORE_STATE : WSCC_MANUAL);
 }
 
 namespace WindowManager

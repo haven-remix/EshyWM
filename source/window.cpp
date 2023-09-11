@@ -140,10 +140,11 @@ EshyWMWindow::~EshyWMWindow()
 
 void EshyWMWindow::frame_window(XWindowAttributes attr)
 {
-    //Window position should be reasonable
     frame_geometry = {attr.x, attr.y, (uint)attr.width, (uint)(attr.height + EshyWMConfig::titlebar_height)};
     frame = XCreateSimpleWindow(DISPLAY, ROOT, frame_geometry.x, frame_geometry.y, frame_geometry.width, frame_geometry.height, EshyWMConfig::window_frame_border_width, EshyWMConfig::window_frame_border_color, EshyWMConfig::window_background_color);
     XSelectInput(DISPLAY, frame, SubstructureNotifyMask | SubstructureRedirectMask | EnterWindowMask);
+    //Resize because in case we use the * 0.9 version of height, then the bottom is cut off
+    XResizeWindow(DISPLAY, window, attr.width, attr.height);
     XReparentWindow(DISPLAY, window, frame, 0, (!b_force_no_titlebar ? EshyWMConfig::titlebar_height : 0));
     XMapWindow(DISPLAY, frame);
 
@@ -306,13 +307,15 @@ void EshyWMWindow::maximize_window(bool b_maximize, EWindowStateChangeCondition 
 
 void EshyWMWindow::fullscreen_window(bool b_fullscreen, EWindowStateChangeCondition condition)
 {
-    if(get_window_state() != WS_FULLSCREEN)
+    if(b_fullscreen)
     {        
         std::shared_ptr<s_monitor_info> monitor;
         if(majority_monitor(frame_geometry, monitor))
         {
             if (window_state == WS_NORMAL)
                 pre_state_change_geometry = frame_geometry;
+            if(condition == WSCC_STORE_STATE)
+                previous_state = window_state;
         
             set_show_titlebar(false);
 
@@ -326,6 +329,13 @@ void EshyWMWindow::fullscreen_window(bool b_fullscreen, EWindowStateChangeCondit
     }
     else
     {
+        if(previous_state == WS_MAXIMIZED)
+        {
+            previous_state = WS_NONE;
+            maximize_window(true);
+            return;
+        }
+
         if(current_monitor)
             current_monitor->taskbar->show_taskbar(true);
 

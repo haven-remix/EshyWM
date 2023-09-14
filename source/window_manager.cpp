@@ -138,7 +138,7 @@ static std::shared_ptr<EshyWMWindow> register_window(Window window, bool b_was_c
     XQueryPointer(DISPLAY, ROOT, &window_return, &window_return, &root_x, &root_y, &others, &others, &mask_return);
 
     std::shared_ptr<s_monitor_info> monitor;
-    if(position_in_monitor(root_x, root_y, &monitor))
+    if(position_in_monitor(root_x, root_y, monitor))
     {
         x_window_attributes.width = std::min((int)(monitor->width * 0.9f), x_window_attributes.width);
         x_window_attributes.height = std::min((int)((monitor->height - EshyWMConfig::taskbar_height) * 0.9f), x_window_attributes.height);
@@ -433,13 +433,33 @@ static void OnKeyPress(const XKeyEvent& event)
         ELSE_CHECK_KEYSYM_PRESSED(event, XK_a | XK_A)
         EshyWMWindow::toggle_minimize(window);
         ELSE_CHECK_KEYSYM_PRESSED(event, XK_Left)
-        window->anchor_window(WS_ANCHORED_LEFT);
+        {
+            if(event.state & ShiftMask)
+                window->attempt_shift_monitor(WS_ANCHORED_LEFT);
+            else
+                window->anchor_window(WS_ANCHORED_LEFT);
+        }
         ELSE_CHECK_KEYSYM_PRESSED(event, XK_Up)
-        window->anchor_window(WS_ANCHORED_UP);
+        {
+            if(event.state & ShiftMask)
+                window->attempt_shift_monitor(WS_ANCHORED_UP);
+            else
+                window->anchor_window(WS_ANCHORED_UP);
+        }
         ELSE_CHECK_KEYSYM_PRESSED(event, XK_Right)
-        window->anchor_window(WS_ANCHORED_RIGHT);
+        {
+            if(event.state & ShiftMask)
+                window->attempt_shift_monitor(WS_ANCHORED_RIGHT);
+            else
+                window->anchor_window(WS_ANCHORED_RIGHT);
+        }
         ELSE_CHECK_KEYSYM_PRESSED(event, XK_Down)
-        window->anchor_window(WS_ANCHORED_DOWN);
+        {
+            if(event.state & ShiftMask)
+                window->attempt_shift_monitor(WS_ANCHORED_DOWN);
+            else
+                window->anchor_window(WS_ANCHORED_DOWN);
+        }
         ELSE_CHECK_KEYSYM_PRESSED(event, XK_o | XK_O)
         increment_window_transparency(event.window, EshyWMConfig::window_opacity_step);
         ELSE_CHECK_KEYSYM_PRESSED(event, XK_i | XK_I)

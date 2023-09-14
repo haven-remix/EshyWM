@@ -85,7 +85,7 @@ void EshyWMSwitcher::update_button_positions()
     XQueryPointer(DISPLAY, ROOT, &window_return, &window_return, &root_x, &root_y, &others, &others, &mask_return);
 
     std::shared_ptr<s_monitor_info> monitor;
-    if(position_in_monitor(root_x, root_y, &monitor))
+    if(position_in_monitor(root_x, root_y, monitor))
         set_position(CENTER_W(monitor, width), CENTER_H(monitor, height));
     else
         set_position(CENTER_W(WindowManager::monitors[0], width), CENTER_H(WindowManager::monitors[0], height));

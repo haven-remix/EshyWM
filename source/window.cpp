@@ -140,7 +140,7 @@ EshyWMWindow::~EshyWMWindow()
 
 void EshyWMWindow::frame_window(XWindowAttributes attr)
 {
-    frame_geometry = {attr.x, attr.y, (uint)attr.width, (uint)(attr.height + EshyWMConfig::titlebar_height)};
+    pre_state_change_geometry = frame_geometry = {attr.x, attr.y, (uint)attr.width, (uint)(attr.height + EshyWMConfig::titlebar_height)};
     frame = XCreateSimpleWindow(DISPLAY, ROOT, frame_geometry.x, frame_geometry.y, frame_geometry.width, frame_geometry.height, EshyWMConfig::window_frame_border_width, EshyWMConfig::window_frame_border_color, EshyWMConfig::window_background_color);
     XSelectInput(DISPLAY, frame, SubstructureNotifyMask | SubstructureRedirectMask | EnterWindowMask);
     //Resize because in case we use the * 0.9 version of height, then the bottom is cut off
@@ -148,6 +148,7 @@ void EshyWMWindow::frame_window(XWindowAttributes attr)
     XReparentWindow(DISPLAY, window, frame, 0, (!b_force_no_titlebar ? EshyWMConfig::titlebar_height : 0));
     XMapWindow(DISPLAY, frame);
 
+    majority_monitor(frame_geometry, current_monitor);
     set_window_state(WS_NORMAL);
 
     //Set frame class to match the window
@@ -224,6 +225,11 @@ void EshyWMWindow::setup_grab_events()
     GRAB_KEY(XKeysymToKeycode(DISPLAY, XK_Up), Mod4Mask, frame);
     GRAB_KEY(XKeysymToKeycode(DISPLAY, XK_Right), Mod4Mask, frame);
     GRAB_KEY(XKeysymToKeycode(DISPLAY, XK_Down), Mod4Mask, frame);
+
+    GRAB_KEY(XKeysymToKeycode(DISPLAY, XK_Left), Mod4Mask | ShiftMask, frame);
+    GRAB_KEY(XKeysymToKeycode(DISPLAY, XK_Up), Mod4Mask | ShiftMask, frame);
+    GRAB_KEY(XKeysymToKeycode(DISPLAY, XK_Right), Mod4Mask | ShiftMask, frame);
+    GRAB_KEY(XKeysymToKeycode(DISPLAY, XK_Down), Mod4Mask | ShiftMask, frame);
 
     GRAB_KEY(XKeysymToKeycode(DISPLAY, XK_o | XK_O), Mod4Mask, frame);
     GRAB_KEY(XKeysymToKeycode(DISPLAY, XK_i | XK_I), Mod4Mask, frame);
@@ -395,47 +401,47 @@ void EshyWMWindow::focus_window(std::shared_ptr<class EshyWMWindow> window)
     SWITCHER->update_switcher_window_options();
 }
 
-void EshyWMWindow::anchor_window(EWindowState anchor)
+void EshyWMWindow::anchor_window(EWindowState anchor, std::shared_ptr<s_monitor_info> monitor_override)
 {
     if(window_state == anchor)
     {
-        attempt_shift_monitor(anchor);
+        attempt_shift_monitor_anchor(anchor);
         return;
     }
 
-    std::shared_ptr<s_monitor_info> monitor_info;
-    if(!majority_monitor(get_frame_geometry(), monitor_info))
+    std::shared_ptr<s_monitor_info> monitor_info = monitor_override;
+    if(!monitor_override && !majority_monitor(get_frame_geometry(), monitor_info))
         return;
-
-    if(window_state < WS_MAXIMIZED)
+    
+    if(window_state == WS_NORMAL)
         pre_state_change_geometry = frame_geometry;
 
     switch (anchor)
     {
     case WS_ANCHORED_LEFT:
     {
-        if (window_state == WS_ANCHORED_RIGHT) goto set_normal;
+        if (window_state == WS_ANCHORED_RIGHT && !monitor_override) goto set_normal;
         move_window_absolute(monitor_info->x, monitor_info->y);
         resize_window_absolute(monitor_info->width / 2, monitor_info->height - EshyWMConfig::taskbar_height);
         break;
     }
     case WS_ANCHORED_UP:
     {
-        if (window_state == WS_ANCHORED_DOWN) goto set_normal;
+        if (window_state == WS_ANCHORED_DOWN && !monitor_override) goto set_normal;
         move_window_absolute(monitor_info->x, monitor_info->y);
         resize_window_absolute(monitor_info->width, (monitor_info->height - EshyWMConfig::taskbar_height) / 2);
         break;
     }
     case WS_ANCHORED_RIGHT:
     {
-        if (window_state == WS_ANCHORED_LEFT) goto set_normal;
+        if (window_state == WS_ANCHORED_LEFT && !monitor_override) goto set_normal;
         move_window_absolute(monitor_info->x + (monitor_info->width / 2), monitor_info->y);
         resize_window_absolute(monitor_info->width / 2, monitor_info->height - EshyWMConfig::taskbar_height);
         break;
     }
     case WS_ANCHORED_DOWN:
     {
-        if (window_state == WS_ANCHORED_UP) goto set_normal;
+        if (window_state == WS_ANCHORED_UP && !monitor_override) goto set_normal;
         move_window_absolute(monitor_info->x, monitor_info->y + ((monitor_info->height - EshyWMConfig::taskbar_height) / 2));
         resize_window_absolute(monitor_info->width, (monitor_info->height - EshyWMConfig::taskbar_height) / 2);
         break;
@@ -453,11 +459,116 @@ set_normal:
     set_window_state(anchor);
 }
 
+void EshyWMWindow::attempt_shift_monitor_anchor(EWindowState direction)
+{
+    std::shared_ptr<s_monitor_info> monitor_info;
+    if(!majority_monitor(get_frame_geometry(), monitor_info))
+        return;
+
+    int test_x = 0;
+    int test_y = 0;
+    EWindowState anchor = WS_NONE;
+    rect new_pre_state_change_geometry = pre_state_change_geometry;
+
+    switch(direction)
+    {
+    case WS_ANCHORED_LEFT:
+    {
+        test_x = monitor_info->x - 10;
+        test_y = monitor_info->y;
+        anchor = WS_ANCHORED_RIGHT;
+        new_pre_state_change_geometry.x -= current_monitor->width;
+        break;
+    }
+    case WS_ANCHORED_UP:
+    {
+        test_x = monitor_info->x;
+        test_y = monitor_info->y - 10;
+        anchor = WS_ANCHORED_DOWN;
+        new_pre_state_change_geometry.y -= current_monitor->height;
+        break;
+    }
+    case WS_ANCHORED_RIGHT:
+    {
+        test_x = monitor_info->x + monitor_info->width + 10;
+        test_y = monitor_info->y;
+        anchor = WS_ANCHORED_LEFT;
+        new_pre_state_change_geometry.x += current_monitor->width;
+        break;
+    }
+    case WS_ANCHORED_DOWN:
+    {
+        test_x = monitor_info->x;
+        test_y = monitor_info->y + monitor_info->height + 10;
+        anchor = WS_ANCHORED_UP;
+        new_pre_state_change_geometry.y += current_monitor->height;
+        break;
+    }
+    };
+
+    std::shared_ptr<s_monitor_info> new_monitor_info;
+    if(position_in_monitor(test_x, test_y, new_monitor_info))
+    {
+        pre_state_change_geometry = new_pre_state_change_geometry;
+        pre_state_change_geometry.width *= current_monitor->width / new_monitor_info->width;
+        pre_state_change_geometry.height *= current_monitor->height / new_monitor_info->height;
+        anchor_window(anchor, new_monitor_info);
+        current_monitor = new_monitor_info;
+    }
+}
+
 void EshyWMWindow::attempt_shift_monitor(EWindowState direction)
 {
     std::shared_ptr<s_monitor_info> monitor_info;
     if(!majority_monitor(get_frame_geometry(), monitor_info))
         return;
+
+    int test_x = 0;
+    int test_y = 0;
+    rect new_pre_state_change_geometry = pre_state_change_geometry;
+
+    switch(direction)
+    {
+    case WS_ANCHORED_LEFT:
+    {
+        test_x = monitor_info->x - 10;
+        test_y = monitor_info->y;
+        new_pre_state_change_geometry.x -= current_monitor->width;
+        break;
+    }
+    case WS_ANCHORED_UP:
+    {
+        test_x = monitor_info->x;
+        test_y = monitor_info->y - 10;
+        new_pre_state_change_geometry.y -= current_monitor->height;
+        break;
+    }
+    case WS_ANCHORED_RIGHT:
+    {
+        test_x = monitor_info->x + monitor_info->width + 10;
+        test_y = monitor_info->y;
+        new_pre_state_change_geometry.x += current_monitor->width;
+        break;
+    }
+    case WS_ANCHORED_DOWN:
+    {
+        test_x = monitor_info->x;
+        test_y = monitor_info->y + monitor_info->height + 10;
+        new_pre_state_change_geometry.y += current_monitor->height;
+        break;
+    }
+    };
+
+    std::shared_ptr<s_monitor_info> new_monitor_info;
+    if(position_in_monitor(test_x, test_y, new_monitor_info))
+    {
+        pre_state_change_geometry = new_pre_state_change_geometry;
+        pre_state_change_geometry.width *= current_monitor->width / new_monitor_info->width;
+        pre_state_change_geometry.height *= current_monitor->height / new_monitor_info->height;
+        move_window_absolute(pre_state_change_geometry.x, pre_state_change_geometry.y);
+        resize_window_absolute(pre_state_change_geometry.width, pre_state_change_geometry.height);
+        current_monitor = new_monitor_info;
+    }
 }
 
 

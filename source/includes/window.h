@@ -51,7 +51,8 @@ public:
     void fullscreen_window(bool b_fullscreen, EWindowStateChangeCondition condition = WSCC_MANUAL);
     static void close_window(std::shared_ptr<class EshyWMWindow> window, void* null = nullptr);
     static void focus_window(std::shared_ptr<class EshyWMWindow> window);
-    void anchor_window(EWindowState anchor);
+    void anchor_window(EWindowState anchor, std::shared_ptr<s_monitor_info> monitor_override = nullptr);
+    void attempt_shift_monitor_anchor(EWindowState direction);
     void attempt_shift_monitor(EWindowState direction);
 
     void move_window_absolute(int new_position_x, int new_position_y, bool b_from_maximize = false);

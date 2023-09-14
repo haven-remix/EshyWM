@@ -57,7 +57,7 @@ struct rect
 };
 
 extern bool majority_monitor(rect window_geometry, std::shared_ptr<struct s_monitor_info>& monitor_info);
-extern bool position_in_monitor(int x, int y, std::shared_ptr<struct s_monitor_info>* monitor_info);
+extern bool position_in_monitor(int x, int y, std::shared_ptr<struct s_monitor_info>& monitor_info);
 
 extern void set_window_transparency(Window window, float transparency);
 extern void increment_window_transparency(Window window, float transparency);

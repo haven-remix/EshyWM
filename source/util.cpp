@@ -164,14 +164,13 @@ bool majority_monitor(rect window_geometry, std::shared_ptr<s_monitor_info>& mon
     return false;
 }
 
-bool position_in_monitor(int x, int y, std::shared_ptr<s_monitor_info>* monitor_info)
+bool position_in_monitor(int x, int y, std::shared_ptr<s_monitor_info>& monitor_info)
 {
 	for(std::shared_ptr<s_monitor_info> monitor : WindowManager::monitors)
     {
         if(x >= monitor->x && x <= monitor->x + monitor->width && y >= monitor->y && y <= monitor->y + monitor->height)
         {
-			if(monitor_info)
-            	*monitor_info = monitor;
+            monitor_info = monitor;
             return true;
         }
     }

@@ -41,7 +41,7 @@ void Button::click()
 }
 
 
-WindowButton::WindowButton(Window parent_window, const rect& _button_geometry, const button_color_data& _background_color)
+WindowButton::WindowButton(Window parent_window, const Rect& _button_geometry, const button_color_data& _background_color)
 {
     button_geometry = _button_geometry;
     button_color = _background_color;

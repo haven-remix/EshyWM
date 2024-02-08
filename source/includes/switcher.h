@@ -12,7 +12,7 @@ class EshyWMSwitcher : public EshyWMMenuBase
 {
 public:
 
-    EshyWMSwitcher(rect _menu_geometry, Color _menu_color);
+    EshyWMSwitcher(Rect _menu_geometry, Color _menu_color);
     virtual void show() override;
     virtual void raise(bool b_set_focus = false) override;
     void update_button_positions();

@@ -14,7 +14,7 @@ class EshyWMTaskbar : public EshyWMMenuBase
 {
 public:
 
-    EshyWMTaskbar(rect _menu_geometry, Color _menu_color);
+    EshyWMTaskbar(Rect _menu_geometry, Color _menu_color);
     ~EshyWMTaskbar();
 
     void update_taskbar_size(uint width, uint height);

@@ -5,7 +5,7 @@
 
 #include <X11/Xutil.h>
 
-EshyWMMenuBase::EshyWMMenuBase(rect _menu_geometry, Color _menu_color) : menu_geometry(_menu_geometry), menu_color(_menu_color)
+EshyWMMenuBase::EshyWMMenuBase(Rect _menu_geometry, Color _menu_color) : menu_geometry(_menu_geometry), menu_color(_menu_color)
 {
     menu_window = XCreateSimpleWindow(DISPLAY, ROOT, menu_geometry.x, menu_geometry.y, menu_geometry.width, menu_geometry.height, 0, 0, menu_color);
     XSelectInput(DISPLAY, menu_window, SubstructureRedirectMask | SubstructureNotifyMask | VisibilityChangeMask);

@@ -148,6 +148,8 @@ void EshyWMWindow::frame_window(XWindowAttributes attr)
     XReparentWindow(DISPLAY, window, frame, 0, (!b_force_no_titlebar ? EshyWMConfig::titlebar_height : 0));
     XMapWindow(DISPLAY, frame);
 
+    XSelectInput(DISPLAY, window, PropertyChangeMask);
+
     majority_monitor(frame_geometry, current_monitor);
     set_window_state(WS_NORMAL);
 
@@ -176,14 +178,14 @@ void EshyWMWindow::frame_window(XWindowAttributes attr)
         cairo_titlebar_surface = cairo_xlib_surface_create(DISPLAY, titlebar, DefaultVisual(DISPLAY, 0), attr.width, EshyWMConfig::titlebar_height);
         cairo_context = cairo_create(cairo_titlebar_surface);
         
-        const rect initial_size = {0, 0, EshyWMConfig::titlebar_button_size, EshyWMConfig::titlebar_button_size};
+        const Rect initial_size = {0, 0, EshyWMConfig::titlebar_button_size, EshyWMConfig::titlebar_button_size};
         const button_color_data color = {EshyWMConfig::titlebar_button_normal_color, EshyWMConfig::titlebar_button_hovered_color, EshyWMConfig::titlebar_button_pressed_color};
         const button_color_data close_button_color = {EshyWMConfig::titlebar_button_normal_color, EshyWMConfig::close_button_color, EshyWMConfig::titlebar_button_pressed_color};
-        minimize_button = std::make_shared<ImageButton>(titlebar, initial_size, color, EshyWMConfig::minimize_button_image_path.c_str());
-        maximize_button = std::make_shared<ImageButton>(titlebar, initial_size, color, EshyWMConfig::maximize_button_image_path.c_str());
+        //minimize_button = std::make_shared<ImageButton>(titlebar, initial_size, color, EshyWMConfig::minimize_button_image_path.c_str());
+        //maximize_button = std::make_shared<ImageButton>(titlebar, initial_size, color, EshyWMConfig::maximize_button_image_path.c_str());
         close_button = std::make_shared<ImageButton>(titlebar, initial_size, close_button_color, EshyWMConfig::close_button_image_path.c_str());
-        minimize_button->get_data() = {shared_from_this(), &EshyWMWindow::toggle_minimize};
-        maximize_button->get_data() = {shared_from_this(), &EshyWMWindow::toggle_maximize};
+        //minimize_button->get_data() = {shared_from_this(), &EshyWMWindow::toggle_minimize};
+        //maximize_button->get_data() = {shared_from_this(), &EshyWMWindow::toggle_maximize};
         close_button->get_data() = {shared_from_this(), &EshyWMWindow::close_window};
     }
 
@@ -213,7 +215,8 @@ void EshyWMWindow::setup_grab_events()
     XGrabButton(DISPLAY, Button1, AnyModifier, frame, false, ButtonPressMask, GrabModeSync, GrabModeAsync, None, None);
     GRAB_BUTTON(Button1, Mod4Mask, frame, ButtonReleaseMask | ButtonMotionMask);
     GRAB_BUTTON(Button3, Mod4Mask, frame, ButtonReleaseMask | ButtonMotionMask);
-    XGrabButton(DISPLAY, Button1, AnyModifier, titlebar, false, ButtonPressMask | ButtonReleaseMask | ButtonMotionMask, GrabModeAsync, GrabModeAsync, titlebar, None);
+    GRAB_BUTTON(Button1, AnyModifier, titlebar, ButtonPressMask | ButtonReleaseMask | ButtonMotionMask);
+    GRAB_BUTTON(Button3, AnyModifier, titlebar, ButtonPressMask);
 
     //Basic functions
     GRAB_KEY(XKeysymToKeycode(DISPLAY, XK_c | XK_C), Mod4Mask, frame);
@@ -231,6 +234,16 @@ void EshyWMWindow::setup_grab_events()
     GRAB_KEY(XKeysymToKeycode(DISPLAY, XK_Right), Mod4Mask | ShiftMask, frame);
     GRAB_KEY(XKeysymToKeycode(DISPLAY, XK_Down), Mod4Mask | ShiftMask, frame);
 
+    GRAB_KEY(XKeysymToKeycode(DISPLAY, XK_Left), Mod4Mask | ControlMask, frame);
+    GRAB_KEY(XKeysymToKeycode(DISPLAY, XK_Up), Mod4Mask | ControlMask, frame);
+    GRAB_KEY(XKeysymToKeycode(DISPLAY, XK_Right), Mod4Mask | ControlMask, frame);
+    GRAB_KEY(XKeysymToKeycode(DISPLAY, XK_Down), Mod4Mask | ControlMask, frame);
+
+    GRAB_KEY(XKeysymToKeycode(DISPLAY, XK_Left), Mod4Mask | ShiftMask | ControlMask, frame);
+    GRAB_KEY(XKeysymToKeycode(DISPLAY, XK_Up), Mod4Mask | ShiftMask | ControlMask, frame);
+    GRAB_KEY(XKeysymToKeycode(DISPLAY, XK_Right), Mod4Mask | ShiftMask | ControlMask, frame);
+    GRAB_KEY(XKeysymToKeycode(DISPLAY, XK_Down), Mod4Mask | ShiftMask | ControlMask, frame);
+
     GRAB_KEY(XKeysymToKeycode(DISPLAY, XK_o | XK_O), Mod4Mask, frame);
     GRAB_KEY(XKeysymToKeycode(DISPLAY, XK_i | XK_I), Mod4Mask, frame);
 }
@@ -238,10 +251,11 @@ void EshyWMWindow::setup_grab_events()
 void EshyWMWindow::remove_grab_events()
 {
     //Basic movement and resizing
-    XUngrabButton(DISPLAY, Button1, AnyModifier, frame);
+    UNGRAB_BUTTON(Button1, AnyModifier, frame);
     UNGRAB_BUTTON(Button1, Mod4Mask, frame);
     UNGRAB_BUTTON(Button3, Mod4Mask, frame);
-    XUngrabButton(DISPLAY, Button1, AnyModifier, titlebar);
+    UNGRAB_BUTTON(Button1, AnyModifier, titlebar);
+    UNGRAB_BUTTON(Button3, AnyModifier, titlebar);
 
     //Basic functions
     UNGRAB_KEY(XKeysymToKeycode(DISPLAY, XK_c | XK_C), Mod4Mask, frame);
@@ -254,6 +268,16 @@ void EshyWMWindow::remove_grab_events()
     UNGRAB_KEY(XKeysymToKeycode(DISPLAY, XK_Right), Mod4Mask, frame);
     UNGRAB_KEY(XKeysymToKeycode(DISPLAY, XK_Down), Mod4Mask, frame);
 
+    UNGRAB_KEY(XKeysymToKeycode(DISPLAY, XK_Left), Mod4Mask | ShiftMask, frame);
+    UNGRAB_KEY(XKeysymToKeycode(DISPLAY, XK_Up), Mod4Mask | ShiftMask, frame);
+    UNGRAB_KEY(XKeysymToKeycode(DISPLAY, XK_Right), Mod4Mask | ShiftMask, frame);
+    UNGRAB_KEY(XKeysymToKeycode(DISPLAY, XK_Down), Mod4Mask | ShiftMask, frame);
+
+    UNGRAB_KEY(XKeysymToKeycode(DISPLAY, XK_Left), Mod4Mask | ControlMask, frame);
+    UNGRAB_KEY(XKeysymToKeycode(DISPLAY, XK_Up), Mod4Mask | ControlMask, frame);
+    UNGRAB_KEY(XKeysymToKeycode(DISPLAY, XK_Right), Mod4Mask | ControlMask, frame);
+    UNGRAB_KEY(XKeysymToKeycode(DISPLAY, XK_Down), Mod4Mask | ControlMask, frame);
+
     UNGRAB_KEY(XKeysymToKeycode(DISPLAY, XK_o | XK_O), Mod4Mask, frame);
     UNGRAB_KEY(XKeysymToKeycode(DISPLAY, XK_i | XK_I), Mod4Mask, frame);
 }
@@ -261,35 +285,35 @@ void EshyWMWindow::remove_grab_events()
 
 void EshyWMWindow::minimize_window(bool b_minimize, EWindowStateChangeCondition condition)
 {
-    if(b_minimize)
+    if(b_minimize && window_state != WS_MINIMIZED)
     {
         XUnmapWindow(DISPLAY, get_frame());
-        if(window_state == WS_FULLSCREEN)
-        {
-            move_window_absolute(pre_state_change_geometry.x, pre_state_change_geometry.y);
-            resize_window_absolute(pre_state_change_geometry.width, pre_state_change_geometry.height);
-        }
+        fullscreen_window(false);
         set_window_state(WS_MINIMIZED);
     }
-    else
+    else if (!b_minimize && window_state == WS_MINIMIZED)
     {
+        set_window_state(previous_state);
         XMapWindow(DISPLAY, get_frame());
         update_titlebar();
-        set_window_state(WS_NORMAL);
+
+        //Restore the window to its previous state
+        if (window_state == WS_MAXIMIZED)
+            maximize_window(true);
+        else if (window_state >= WS_ANCHORED_LEFT)
+            anchor_window(window_state);
     }
 }
 
 void EshyWMWindow::maximize_window(bool b_maximize, EWindowStateChangeCondition condition)
 {
-    if(b_maximize)
+    if(b_maximize && window_state != WS_MAXIMIZED)
     {
         std::shared_ptr<s_monitor_info> monitor;
         if(majority_monitor(frame_geometry, monitor))
         {
-            if(window_state == WS_FULLSCREEN)
-                fullscreen_window(false, WSCC_FROM_MAXIMIZE);
-            else if (window_state == WS_NORMAL)
-                pre_state_change_geometry = frame_geometry;
+            fullscreen_window(false);
+            pre_state_change_geometry = frame_geometry;
 
             move_window_absolute(monitor->x, monitor->y, true);
             resize_window_absolute(monitor->width - (EshyWMConfig::window_frame_border_width * 2), (monitor->height - EshyWMConfig::taskbar_height) - (EshyWMConfig::window_frame_border_width * 2), true);
@@ -297,7 +321,7 @@ void EshyWMWindow::maximize_window(bool b_maximize, EWindowStateChangeCondition 
             set_window_state(WS_MAXIMIZED);
         }
     }
-    else
+    else if (!b_maximize && window_state == WS_MAXIMIZED)
     {
         if(condition <= WSCC_FROM_RESIZE)
         {
@@ -313,7 +337,7 @@ void EshyWMWindow::maximize_window(bool b_maximize, EWindowStateChangeCondition 
 
 void EshyWMWindow::fullscreen_window(bool b_fullscreen, EWindowStateChangeCondition condition)
 {
-    if(b_fullscreen)
+    if(b_fullscreen && window_state != WS_FULLSCREEN)
     {        
         std::shared_ptr<s_monitor_info> monitor;
         if(majority_monitor(frame_geometry, monitor))
@@ -333,7 +357,7 @@ void EshyWMWindow::fullscreen_window(bool b_fullscreen, EWindowStateChangeCondit
             set_window_state(WS_FULLSCREEN);
         }
     }
-    else
+    else if (!b_fullscreen && window_state == WS_FULLSCREEN)
     {
         if(previous_state == WS_MAXIMIZED)
         {
@@ -388,17 +412,17 @@ void EshyWMWindow::close_window(std::shared_ptr<EshyWMWindow> window, void* null
     {
         XKillClient(DISPLAY, window->window);
     }
-}
 
-void EshyWMWindow::focus_window(std::shared_ptr<class EshyWMWindow> window)
-{
-    XSetInputFocus(DISPLAY, window->get_window(), RevertToPointerRoot, CurrentTime);
+    Atom ATOM_CLASS = XInternAtom(DISPLAY, "WM_CLASS", False);
 
-    auto i = std::find(WindowManager::window_list.begin(), WindowManager::window_list.end(), window);
-    auto it = WindowManager::window_list.begin() + std::distance(WindowManager::window_list.begin(), i);
-    std::rotate(WindowManager::window_list.begin(), it, it + 1);
+    Atom type;
+    int format;
+    unsigned long n_items;
+    unsigned long bytes_after;
+    unsigned char* property_value = NULL;
+    int status = XGetWindowProperty(DISPLAY, window->get_window(), ATOM_CLASS, 0, 1024, False, AnyPropertyType, &type, &format, &n_items, &bytes_after, &property_value);
 
-    SWITCHER->update_switcher_window_options();
+    EshyWMConfig::add_window_close_state(std::string(reinterpret_cast<const char*>(property_value)), window->get_window_state() == EWindowState::WS_MAXIMIZED ? "maximized" : "normal");
 }
 
 void EshyWMWindow::anchor_window(EWindowState anchor, std::shared_ptr<s_monitor_info> monitor_override)
@@ -468,7 +492,7 @@ void EshyWMWindow::attempt_shift_monitor_anchor(EWindowState direction)
     int test_x = 0;
     int test_y = 0;
     EWindowState anchor = WS_NONE;
-    rect new_pre_state_change_geometry = pre_state_change_geometry;
+    Rect new_pre_state_change_geometry = pre_state_change_geometry;
 
     switch(direction)
     {
@@ -525,7 +549,7 @@ void EshyWMWindow::attempt_shift_monitor(EWindowState direction)
 
     int test_x = 0;
     int test_y = 0;
-    rect new_pre_state_change_geometry = pre_state_change_geometry;
+    Rect new_pre_state_change_geometry = pre_state_change_geometry;
 
     switch(direction)
     {
@@ -566,7 +590,6 @@ void EshyWMWindow::attempt_shift_monitor(EWindowState direction)
         pre_state_change_geometry.width *= current_monitor->width / new_monitor_info->width;
         pre_state_change_geometry.height *= current_monitor->height / new_monitor_info->height;
         move_window_absolute(pre_state_change_geometry.x, pre_state_change_geometry.y);
-        resize_window_absolute(pre_state_change_geometry.width, pre_state_change_geometry.height);
         current_monitor = new_monitor_info;
     }
 }
@@ -642,6 +665,7 @@ void EshyWMWindow::set_window_state(EWindowState new_window_state)
     };
     
     XStoreName(DISPLAY, frame, new_state_name);
+    previous_state = window_state;
     window_state = new_window_state;
 }
 
@@ -690,7 +714,7 @@ void EshyWMWindow::update_titlebar()
         button->draw();
     };
 
-    update_button_position(minimize_button, 3);
-    update_button_position(maximize_button, 2);
+    //update_button_position(minimize_button, 3);
+    //update_button_position(maximize_button, 2);
     update_button_position(close_button, 1);
 }

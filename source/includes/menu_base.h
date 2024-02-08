@@ -16,7 +16,7 @@ class EshyWMMenuBase
 {
 public:
 
-    EshyWMMenuBase(rect _menu_geometry, Color _menu_color);
+    EshyWMMenuBase(Rect _menu_geometry, Color _menu_color);
 
     virtual void show();
     virtual void remove();
@@ -33,7 +33,7 @@ protected:
 
     Window menu_window;
     GC graphics_context_internal;
-    rect menu_geometry;
+    Rect menu_geometry;
     Color menu_color;
     bool b_menu_active;
 };

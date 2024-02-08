@@ -8,5 +8,5 @@ class EshyWMRunMenu : public EshyWMMenuBase
 {
 public:
 
-    EshyWMRunMenu(rect _menu_geometry, Color _menu_color);
+    EshyWMRunMenu(Rect _menu_geometry, Color _menu_color);
 };

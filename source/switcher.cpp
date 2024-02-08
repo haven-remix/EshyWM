@@ -25,7 +25,7 @@ static const int get_button_x_position(const int i)
 }
 
 
-EshyWMSwitcher::EshyWMSwitcher(rect _menu_geometry, Color _menu_color) : EshyWMMenuBase(_menu_geometry, _menu_color), selected_option(0)
+EshyWMSwitcher::EshyWMSwitcher(Rect _menu_geometry, Color _menu_color) : EshyWMMenuBase(_menu_geometry, _menu_color), selected_option(0)
 {
     const char* class_name = "eshywm_switcher\0switcher";
     Atom ATOM_CLASS = XInternAtom(DISPLAY, "WM_CLASS", False);
@@ -88,7 +88,7 @@ void EshyWMSwitcher::update_button_positions()
     if(position_in_monitor(root_x, root_y, monitor))
         set_position(CENTER_W(monitor, width), CENTER_H(monitor, height));
     else
-        set_position(CENTER_W(WindowManager::monitors[0], width), CENTER_H(WindowManager::monitors[0], height));
+        set_position(CENTER_W(EshyWM::monitors[0], width), CENTER_H(EshyWM::monitors[0], height));
     
     for(int i = 0; i < switcher_window_options.size(); i++)
     {
@@ -101,16 +101,16 @@ void EshyWMSwitcher::update_switcher_window_options()
 {
     std::vector<window_button_pair> old_switcher_window_options = switcher_window_options;
 
-    switcher_window_options.clear();
+    // switcher_window_options.clear();
 
-    for(std::shared_ptr<EshyWMWindow> window : WindowManager::window_list)
-    {
-        for(window_button_pair pair : old_switcher_window_options)
-        {
-            if(pair.window == window)
-                switcher_window_options.push_back(pair);
-        }
-    }   
+    // for(std::shared_ptr<EshyWMWindow> window : WindowManager::window_list)
+    // {
+    //     for(window_button_pair pair : old_switcher_window_options)
+    //     {
+    //         if(pair.window == window)
+    //             switcher_window_options.push_back(pair);
+    //     }
+    // }
 }
 
 
@@ -122,7 +122,7 @@ void EshyWMSwitcher::add_window_option(std::shared_ptr<EshyWMWindow> associated_
 
     const float scale = 140.0f / height;
 
-    const rect size = {0, 0, (uint)std::round(width * scale), (uint)std::round(height * scale)};
+    const Rect size = {0, 0, (uint)std::round(width * scale), (uint)std::round(height * scale)};
     const button_color_data color = {EshyWMConfig::switcher_button_color, EshyWMConfig::switcher_button_color, EshyWMConfig::switcher_button_color};
 
     std::shared_ptr<ImageButton> button = std::make_shared<ImageButton>(menu_window, size, color, icon);

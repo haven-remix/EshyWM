@@ -10,7 +10,7 @@ class EshyWMContextMenu : public EshyWMMenuBase
 {
 public:
 
-    EshyWMContextMenu(rect _menu_geometry, Color _menu_color);
+    EshyWMContextMenu(Rect _menu_geometry, Color _menu_color);
     virtual void draw() override;
 
 private:

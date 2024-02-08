@@ -2,6 +2,7 @@
 
 #include <string>
 #include <vector>
+#include <unordered_map>
 
 namespace EshyWMConfig
 {
@@ -15,6 +16,10 @@ namespace EshyWMConfig
     extern std::string close_button_image_path;
 
     extern float window_opacity_step;
+    extern int window_x_movement_step;
+    extern int window_y_movement_step;
+    extern int window_width_resize_step;
+    extern int window_height_resize_step;
 
     /**Titlebar*/
     extern uint titlebar_height;
@@ -57,8 +62,19 @@ namespace EshyWMConfig
     extern std::string background_path;
 
     extern std::vector<std::string> startup_commands;
+    extern std::unordered_map<std::string, std::string> window_close_data;
 
-    std::string get_config_file_path();
+    struct KeyBinding
+    {
+        int key;
+        std::string command;
+    };
+
+    extern std::vector<KeyBinding> key_bindings;
 
     void update_config();
+    void update_data();
+    void update_data_file();
+
+    void add_window_close_state(std::string window, std::string new_state);
 };

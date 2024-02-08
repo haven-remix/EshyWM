@@ -13,6 +13,10 @@ std::string EshyWMConfig::minimize_button_image_path = "";
 std::string EshyWMConfig::maximize_button_image_path = "";
 std::string EshyWMConfig::close_button_image_path = "";
 float EshyWMConfig::window_opacity_step = 0.1;
+int EshyWMConfig::window_x_movement_step = 50;
+int EshyWMConfig::window_y_movement_step = 50;
+int EshyWMConfig::window_width_resize_step = 50;
+int EshyWMConfig::window_height_resize_step = 50;
 //Titlebar
 uint EshyWMConfig::titlebar_height = 26;
 uint EshyWMConfig::titlebar_button_size = 26;
@@ -47,10 +51,14 @@ ulong EshyWMConfig::double_click_time = 500;
 //Background image path
 std::string EshyWMConfig::background_path = "";
 
+std::vector<EshyWMConfig::KeyBinding> EshyWMConfig::key_bindings;
+
 std::vector<std::string> EshyWMConfig::startup_commands;
+std::unordered_map<std::string, std::string> EshyWMConfig::window_close_data;
 
 enum VarType
 {
+    VT_INT,
     VT_UINT,
     VT_UINT_HEX,
     VT_ULONG,
@@ -65,6 +73,9 @@ struct key_value_pair
     std::string value;
 };
 
+const std::string CONFIG_FILE_PATH = std::string(getenv("HOME")) + "/.config/eshywm/eshywm.conf";
+const std::string DATA_FILE_PATH = std::string(getenv("HOME")) + "/.eshywm";
+
 static void parse_config_option(std::string line, VarType type, void* config_var, std::string option_name, std::string start_location = " ")
 {
     if(line.find(option_name) != std::string::npos)
@@ -74,6 +85,9 @@ static void parse_config_option(std::string line, VarType type, void* config_var
 
         switch(type)
         {
+        case VarType::VT_INT:
+            *((int*)config_var) = std::stoi(kvp.value);
+            break;
         case VarType::VT_UINT:
             *((uint*)config_var) = std::stoi(kvp.value);
             break;
@@ -98,10 +112,12 @@ static void parse_config_option(std::string line, VarType type, void* config_var
 
 void EshyWMConfig::update_config()
 {
-    std::ifstream config_file(std::string(getenv("HOME")) + "/.config/eshywm/eshywm.conf");
+    std::ifstream config_file(CONFIG_FILE_PATH);
     std::string line;
 
     std::string startup_command;
+
+    KeyBinding key_binding;
 
     while(std::getline(config_file, line))
     {
@@ -117,6 +133,17 @@ void EshyWMConfig::update_config()
             continue;
         }
 
+        parse_config_option(line, VT_INT, &key_binding.key, "keybind_key:");
+        parse_config_option(line, VT_STRING, &key_binding.command, "keybind_command:");
+
+        if(key_binding.key != 0 && key_binding.command != "")
+        {
+            key_bindings.emplace_back(key_binding.key, key_binding.command);
+            key_binding.key = 0;
+            key_binding.command = "";
+            continue;
+        }
+
         parse_config_option(line, VT_STRING, &background_path, "background:", "\"");
 
         parse_config_option(line, VT_UINT, &window_frame_border_width, "window_frame_border_width:");
@@ -128,6 +155,10 @@ void EshyWMConfig::update_config()
         parse_config_option(line, VT_STRING, &close_button_image_path, "close_button_image_path");
 
         parse_config_option(line, VT_FLOAT, &window_opacity_step, "window_opacity_step:");
+        parse_config_option(line, VT_INT, &window_x_movement_step, "window_x_movement_step:");
+        parse_config_option(line, VT_INT, &window_y_movement_step, "window_y_movement_step:");
+        parse_config_option(line, VT_INT, &window_width_resize_step, "window_width_resize_step:");
+        parse_config_option(line, VT_INT, &window_height_resize_step, "window_height_resize_step:");
 
         parse_config_option(line, VT_UINT, &titlebar_height, "titlebar_height:");
         parse_config_option(line, VT_UINT, &titlebar_button_size, "titlebar_button_size:");
@@ -162,4 +193,42 @@ void EshyWMConfig::update_config()
     }
 
     config_file.close();
+}
+
+void EshyWMConfig::update_data()
+{
+    std::ifstream config_file(DATA_FILE_PATH);
+    std::string line;
+
+    std::string window_data;
+
+    while(std::getline(config_file, line))
+    {
+        parse_config_option(line, VT_STRING, &window_data, "window_close_data:");
+        if(window_data != "")
+        {
+            const size_t pos = window_data.find(',');
+            const key_value_pair kvp = {window_data.substr(0, pos).c_str(), window_data.substr(pos + 1, window_data.length() - pos).c_str()};
+            window_close_data.emplace(kvp.key, kvp.value);
+            window_data = "";
+        }
+    }
+
+    config_file.close();
+}
+
+void EshyWMConfig::update_data_file()
+{
+    std::fstream config_file(DATA_FILE_PATH, std::ios_base::out);
+
+    for(auto [a, b] : window_close_data)
+        config_file << "window_close_data: " << a << "," << b << "\n";
+
+    config_file.close();
+}
+
+void EshyWMConfig::add_window_close_state(std::string window, std::string new_state)
+{
+    window_close_data[window] = new_state;
+    update_data_file();
 }

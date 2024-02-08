@@ -2,6 +2,7 @@
 
 #include <cairo/cairo.h>
 
+#include "window_manager.h"
 #include "util.h"
 
 enum EWindowState : uint8_t
@@ -50,7 +51,6 @@ public:
     void maximize_window(bool b_maximize, EWindowStateChangeCondition condition = WSCC_MANUAL);
     void fullscreen_window(bool b_fullscreen, EWindowStateChangeCondition condition = WSCC_MANUAL);
     static void close_window(std::shared_ptr<class EshyWMWindow> window, void* null = nullptr);
-    static void focus_window(std::shared_ptr<class EshyWMWindow> window);
     void anchor_window(EWindowState anchor, std::shared_ptr<s_monitor_info> monitor_override = nullptr);
     void attempt_shift_monitor_anchor(EWindowState direction);
     void attempt_shift_monitor(EWindowState direction);
@@ -66,7 +66,7 @@ public:
     Window get_window() const {return window;}
     Window get_frame() const {return frame;}
     Window get_titlebar() const {return titlebar;}
-    rect get_frame_geometry() const {return frame_geometry;}
+    Rect get_frame_geometry() const {return frame_geometry;}
     Imlib_Image get_window_icon() const {return window_icon;}
     EWindowState get_window_state() const {return window_state;}
     void set_window_state(EWindowState new_window_state);
@@ -75,14 +75,14 @@ public:
     std::shared_ptr<class WindowButton> get_maximize_button() const {return maximize_button;}
     std::shared_ptr<class WindowButton> get_close_button() const {return close_button;}
 
-public:
+private:
 
     Window window;
     Window frame;
     Window titlebar;
 
-    rect frame_geometry;
-    rect pre_state_change_geometry;
+    Rect frame_geometry;
+    Rect pre_state_change_geometry;
     EWindowState previous_state;
 
     std::shared_ptr<s_monitor_info> current_monitor;

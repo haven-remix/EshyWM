@@ -1,6 +1,11 @@
 
 #include "util.h"
 #include "window_manager.h"
+#include "eshywm.h"
+
+#include <fstream>
+#include <stdarg.h>
+#include <string.h>
 
 #ifdef __LOGGING_ENABLED
 
@@ -14,10 +19,50 @@ void __set_global_log_severity(LogSeverity severity)
     __global_log_severity = severity;
 }
 
-void __log_message(LogSeverity severity, char* message, ...)
+void __log_message(LogSeverity severity, const char* message, ...)
 {
     LOG_SEVERITY_CHECK(severity)
-    std::cout << message << std::endl;
+
+	FILE* file = fopen("/home/eshy/log.txt", "a");
+
+	int i;
+	char* s;
+
+	char final[1000];
+	int index;
+
+	va_list args;
+	// va_start(args, message);
+	// while(*message)
+	// {
+	// 	switch(*message)
+	// 	{
+	// 	case 's':
+	// 	{
+	// 		s = va_arg(args, char*);
+	// 		strcat(final, s);
+	// 		break;
+	// 	}
+	// 	case 'i':
+	// 	{
+	// 		i = va_arg(args, int);
+	// 		char temp[12];
+	// 		sprintf(temp, "%i", i);
+	// 		strcat(final, temp);
+	// 		break;
+	// 	}
+	// 	default:
+	// 		strcat(final, (char*)(*message));
+	// 		break;
+	// 	};
+
+	// 	*message++;
+	// 	index++;
+	// }
+	// va_end(args);
+	fprintf(file, message, args);
+	fprintf(file, "\n");
+	fclose(file);
 	LOG_FATAL_CHECK(severity)
 }
 
@@ -149,9 +194,9 @@ void __log_event_info(LogSeverity severity, XEvent event)
 }
 #endif
 
-bool majority_monitor(rect window_geometry, std::shared_ptr<s_monitor_info>& monitor_info)
+bool majority_monitor(Rect window_geometry, std::shared_ptr<s_monitor_info>& monitor_info)
 {
-    for(std::shared_ptr<s_monitor_info> monitor : WindowManager::monitors)
+    for(std::shared_ptr<s_monitor_info> monitor : EshyWM::monitors)
     {
         const int window_center = window_geometry.x + (window_geometry.width / 2);
         if(window_center > monitor->x && window_center < monitor->x + monitor->width)
@@ -166,7 +211,7 @@ bool majority_monitor(rect window_geometry, std::shared_ptr<s_monitor_info>& mon
 
 bool position_in_monitor(int x, int y, std::shared_ptr<s_monitor_info>& monitor_info)
 {
-	for(std::shared_ptr<s_monitor_info> monitor : WindowManager::monitors)
+	for(std::shared_ptr<s_monitor_info> monitor : EshyWM::monitors)
     {
         if(x >= monitor->x && x <= monitor->x + monitor->width && y >= monitor->y && y <= monitor->y + monitor->height)
         {

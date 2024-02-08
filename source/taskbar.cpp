@@ -37,7 +37,7 @@ void on_taskbar_button_clicked(std::shared_ptr<EshyWMWindow> window, void* null)
 }
 
 
-EshyWMTaskbar::EshyWMTaskbar(rect _menu_geometry, Color _menu_color) : EshyWMMenuBase(_menu_geometry, _menu_color)
+EshyWMTaskbar::EshyWMTaskbar(Rect _menu_geometry, Color _menu_color) : EshyWMMenuBase(_menu_geometry, _menu_color)
 {
     const char* class_name = "eshywm_taskbar\0taskbar";
     Atom ATOM_CLASS = XInternAtom(DISPLAY, "WM_CLASS", False);
@@ -86,7 +86,7 @@ void EshyWMTaskbar::add_button(std::shared_ptr<EshyWMWindow> associated_window, 
 {
     const std::shared_ptr<ImageButton> button = std::make_shared<ImageButton>(
         menu_window, 
-        rect{0, 0, EshyWMConfig::taskbar_height - 4, EshyWMConfig::taskbar_height - 4}, 
+        Rect{0, 0, EshyWMConfig::taskbar_height - 4, EshyWMConfig::taskbar_height - 4}, 
         button_color_data{EshyWMConfig::taskbar_color, EshyWMConfig::taskbar_button_hovered_color, EshyWMConfig::taskbar_color}, 
         icon
     );
@@ -118,12 +118,17 @@ void EshyWMTaskbar::display_system_info()
     cairo_select_font_face(cairo_context, "Lato", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_NORMAL);
     cairo_set_font_size(cairo_context, 16);
     cairo_set_source_rgb(cairo_context, 1.0f, 1.0f, 1.0f);
-    
-    cairo_move_to(cairo_context, menu_geometry.width - 50.0f, EshyWMConfig::taskbar_height * 0.6);
-    const std::string battery_percentage = std::to_string(EshyWM::system_info->battery_percentage) + "%";
-    cairo_show_text(cairo_context, battery_percentage.c_str());
 
-    cairo_move_to(cairo_context, menu_geometry.width - 150.0f, EshyWMConfig::taskbar_height * 0.6);
-    const auto time = std::chrono::zoned_time("America/Los_Angeles", EshyWM::system_info->current_time);
+    int x_offset = menu_geometry.width;
+    
+    if(System::battery_percentage < 95)
+    {
+        cairo_move_to(cairo_context, x_offset -= 50.0f, EshyWMConfig::taskbar_height * 0.6);
+        const std::string battery_percentage = std::to_string(System::battery_percentage) + "%";
+        cairo_show_text(cairo_context, battery_percentage.c_str());
+    }
+
+    cairo_move_to(cairo_context, x_offset -= 100.0f, EshyWMConfig::taskbar_height * 0.6);
+    const auto time = std::chrono::zoned_time("America/Los_Angeles", System::current_time);
     cairo_show_text(cairo_context, std::format("{:%r}", time).c_str());
 }

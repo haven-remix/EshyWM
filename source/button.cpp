@@ -34,10 +34,8 @@ const bool Button::check_hovered(int cursor_x, int cursor_y) const
 
 void Button::click()
 {
-    if (data.callback_function)
-    {
-        data.callback_function(data.associated_window, (void*)false);
-    }
+    if(click_callback)
+        click_callback(nullptr);
 }
 
 

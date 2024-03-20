@@ -48,6 +48,8 @@ public:
 
     void click();
 
+    std::function<void(void*)> click_callback;
+
 protected:
 
     Button()

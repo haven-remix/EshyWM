@@ -26,6 +26,8 @@ public:
 
     void display_system_info();
 
+    void on_taskbar_button_clicked(std::shared_ptr<EshyWMWindow> window);
+
     const std::vector<std::shared_ptr<class WindowButton>>& get_taskbar_buttons() const {return taskbar_buttons;}
     std::vector<std::shared_ptr<class WindowButton>>& get_taskbar_buttons() {return taskbar_buttons;}
 

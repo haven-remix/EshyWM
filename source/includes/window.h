@@ -43,20 +43,20 @@ public:
     void setup_grab_events();
     void remove_grab_events();
 
-    static void toggle_minimize(std::shared_ptr<class EshyWMWindow> window, void* null = nullptr) {window->minimize_window(window->get_window_state() != WS_MINIMIZED);}
-    static void toggle_maximize(std::shared_ptr<class EshyWMWindow> window, void* null = nullptr) {window->maximize_window(window->get_window_state() != WS_MAXIMIZED);}
-    static void toggle_fullscreen(std::shared_ptr<class EshyWMWindow> window, void* null = nullptr) {window->fullscreen_window(window->get_window_state() != WS_FULLSCREEN);}
+    void toggle_minimize(void* null = nullptr) {minimize_window(get_window_state() != WS_MINIMIZED);}
+    void toggle_maximize(void* null = nullptr) {maximize_window(get_window_state() != WS_MAXIMIZED);}
+    void toggle_fullscreen(void* null = nullptr) {fullscreen_window(get_window_state() != WS_FULLSCREEN);}
 
-    void minimize_window(bool b_minimize, EWindowStateChangeCondition condition = WSCC_MANUAL);
-    void maximize_window(bool b_maximize, EWindowStateChangeCondition condition = WSCC_MANUAL);
-    void fullscreen_window(bool b_fullscreen, EWindowStateChangeCondition condition = WSCC_MANUAL);
-    static void close_window(std::shared_ptr<class EshyWMWindow> window, void* null = nullptr);
+    void minimize_window(bool b_minimize);
+    void maximize_window(bool b_maximize);
+    void fullscreen_window(bool b_fullscreen);
+    void close_window(void* null = nullptr);
     void anchor_window(EWindowState anchor, std::shared_ptr<s_monitor_info> monitor_override = nullptr);
     void attempt_shift_monitor_anchor(EWindowState direction);
     void attempt_shift_monitor(EWindowState direction);
 
-    void move_window_absolute(int new_position_x, int new_position_y, bool b_from_maximize = false);
-    void resize_window_absolute(uint new_size_x, uint new_size_y, bool b_from_maximize = false);
+    void move_window_absolute(int new_position_x, int new_position_y, bool b_skip_state_checks);
+    void resize_window_absolute(uint new_size_x, uint new_size_y, bool b_skip_state_checks);
 
     void update_titlebar();
 
@@ -71,8 +71,6 @@ public:
     EWindowState get_window_state() const {return window_state;}
     void set_window_state(EWindowState new_window_state);
 
-    std::shared_ptr<class WindowButton> get_minimize_button() const {return minimize_button;}
-    std::shared_ptr<class WindowButton> get_maximize_button() const {return maximize_button;}
     std::shared_ptr<class WindowButton> get_close_button() const {return close_button;}
 
 private:
@@ -96,7 +94,5 @@ private:
     cairo_surface_t* cairo_titlebar_surface;
     cairo_t* cairo_context;
 
-    std::shared_ptr<class WindowButton> minimize_button;
-    std::shared_ptr<class WindowButton> maximize_button;
     std::shared_ptr<class WindowButton> close_button;
 };

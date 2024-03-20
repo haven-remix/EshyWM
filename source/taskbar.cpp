@@ -15,28 +15,6 @@
 #include <X11/Xatom.h>
 #include <cairo/cairo-xlib.h>
 
-void on_taskbar_button_clicked(std::shared_ptr<EshyWMWindow> window, void* null)
-{
-    Window returned_root;
-    Window returned_parent;
-    Window* top_level_windows;
-    unsigned int num_top_level_windows;
-    XQueryTree(DISPLAY, ROOT, &returned_root, &returned_parent, &top_level_windows, &num_top_level_windows);
-
-    if(window->get_frame() != top_level_windows[num_top_level_windows - 1])
-    {
-        if(window->get_window_state() == WS_MINIMIZED)
-            EshyWMWindow::toggle_minimize(window);
-
-        XRaiseWindow(DISPLAY, window->get_frame());
-        window->update_titlebar();
-    }
-    else EshyWMWindow::toggle_minimize(window);
-
-    XFree(top_level_windows);
-}
-
-
 EshyWMTaskbar::EshyWMTaskbar(Rect _menu_geometry, Color _menu_color) : EshyWMMenuBase(_menu_geometry, _menu_color)
 {
     const char* class_name = "eshywm_taskbar\0taskbar";
@@ -90,7 +68,8 @@ void EshyWMTaskbar::add_button(std::shared_ptr<EshyWMWindow> associated_window, 
         button_color_data{EshyWMConfig::taskbar_color, EshyWMConfig::taskbar_button_hovered_color, EshyWMConfig::taskbar_color}, 
         icon
     );
-    button->get_data() = {associated_window, &on_taskbar_button_clicked};
+    button->get_data() = {associated_window, 0};
+    button->click_callback = std::bind(std::mem_fn(&EshyWMTaskbar::on_taskbar_button_clicked), this, associated_window);
     taskbar_buttons.push_back(button);
     update_button_positions();
 
@@ -108,6 +87,27 @@ void EshyWMTaskbar::remove_button(std::shared_ptr<EshyWMWindow> associated_windo
             break;
         }
     }
+}
+
+void EshyWMTaskbar::on_taskbar_button_clicked(std::shared_ptr<EshyWMWindow> window)
+{
+    Window returned_root;
+    Window returned_parent;
+    Window* top_level_windows;
+    unsigned int num_top_level_windows;
+    XQueryTree(DISPLAY, ROOT, &returned_root, &returned_parent, &top_level_windows, &num_top_level_windows);
+
+    if(window->get_frame() != top_level_windows[num_top_level_windows - 1])
+    {
+        if(window->get_window_state() == WS_MINIMIZED)
+            window->toggle_minimize();
+
+        XRaiseWindow(DISPLAY, window->get_frame());
+        window->update_titlebar();
+    }
+    else window->toggle_minimize();
+
+    XFree(top_level_windows);
 }
 
 

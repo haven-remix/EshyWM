@@ -64,15 +64,11 @@ void WindowManager::handle_button_hovered(Window hovered_window, bool b_hovered,
         if(!currently_hovered_button)
             for(std::shared_ptr<EshyWMWindow>& window : window_list)
             {
-                if(window->get_minimize_button() && window->get_minimize_button()->get_window() == hovered_window)
-                    currently_hovered_button = window->get_minimize_button();
-                else if(window->get_maximize_button() && window->get_maximize_button()->get_window() == hovered_window)
-                    currently_hovered_button = window->get_maximize_button();
-                else if(window->get_close_button() && window->get_close_button()->get_window() == hovered_window)
+                if(window->get_close_button() && window->get_close_button()->get_window() == hovered_window)
+                {
                     currently_hovered_button = window->get_close_button();
-
-                if(currently_hovered_button)
                     break;
+                }
             }
 
         if(currently_hovered_button)
@@ -113,8 +109,6 @@ void WindowManager::handle_events()
 
     while(XEventsQueued(DISPLAY, QueuedAfterFlush) != 0)
     {
-        std::cout << "KEYCODE FOR F6:" << XKeysymToKeycode(DISPLAY, XK_F6) << std::endl;
-
         XNextEvent(DISPLAY, &event);
         //LOG_EVENT_INFO(LS_Verbose, event)
         
@@ -272,7 +266,7 @@ std::shared_ptr<EshyWMWindow> WindowManager::register_window(Window window, bool
     new_window->frame_window(x_window_attributes);
     new_window->setup_grab_events();
     if(b_begin_maximized)
-        new_window->maximize_window(true, WSCC_MANUAL);
+        new_window->maximize_window(true);
     window_list.push_back(new_window);
 
     EshyWM::window_created_notify(new_window);
@@ -507,7 +501,7 @@ void WindowManager::OnMotionNotify(const XMotionEvent& event)
                     if(window->get_window_state() != WS_MINIMIZED)
                     {
                         view_desktop_window_list.emplace(window, window->get_window_state());
-                        window->minimize_window(true, WSCC_MANUAL);
+                        window->minimize_window(true);
                     }
                 }
             else
@@ -515,15 +509,15 @@ void WindowManager::OnMotionNotify(const XMotionEvent& event)
                 for(auto [window, window_state] : view_desktop_window_list)
                 {
                     //We need to unminimize windows and restore their previous states
-                    window->minimize_window(false, WSCC_MANUAL);
+                    window->minimize_window(false);
 
                     switch(window_state)
                     {
                     case WS_MAXIMIZED:
-                        window->maximize_window(true, WSCC_MANUAL);
+                        window->maximize_window(true);
                         break;
                     case WS_FULLSCREEN:
-                        window->fullscreen_window(true, WSCC_MANUAL);
+                        window->fullscreen_window(true);
                         break;
                     }
                 }
@@ -543,14 +537,14 @@ void WindowManager::OnMotionNotify(const XMotionEvent& event)
     if(window && event.state & Mod4Mask)
     {
         if(event.state & Button1Mask)
-            window->move_window_absolute(manipulating_window_geometry.x + delta.x, manipulating_window_geometry.y + delta.y);
+            window->move_window_absolute(manipulating_window_geometry.x + delta.x, manipulating_window_geometry.y + delta.y, false);
         else if(event.state & Button3Mask)
-            window->resize_window_absolute(std::max((int)manipulating_window_geometry.width + delta.x, 10), std::max((int)manipulating_window_geometry.height + delta.y, 10));
+            window->resize_window_absolute(std::max((int)manipulating_window_geometry.width + delta.x, 10), std::max((int)manipulating_window_geometry.height + delta.y, 10), false);
     }
     else if(window = window_list_contains_titlebar(event.window))
     {
         if(window && event.time - titlebar_double_click.last_double_click_time > 10)
-            window->move_window_absolute(manipulating_window_geometry.x + delta.x, manipulating_window_geometry.y + delta.y);
+            window->move_window_absolute(manipulating_window_geometry.x + delta.x, manipulating_window_geometry.y + delta.y, false);
     }
 }
 
@@ -586,54 +580,54 @@ void WindowManager::OnKeyPress(const XKeyEvent& event)
         manipulating_window_geometry = window->get_frame_geometry();
 
         CHECK_KEYSYM_PRESSED(event, XK_C)
-        EshyWMWindow::close_window(window);
+        window->close_window();
         ELSE_CHECK_KEYSYM_PRESSED(event, XK_d | XK_D)
-        EshyWMWindow::toggle_maximize(window);
+        window->toggle_maximize();
         ELSE_CHECK_KEYSYM_PRESSED(event, XK_f | XK_F)
-        EshyWMWindow::toggle_fullscreen(window);
+        window->toggle_fullscreen();
         ELSE_CHECK_KEYSYM_PRESSED(event, XK_a | XK_A)
-        EshyWMWindow::toggle_minimize(window);
+        window->toggle_minimize();
         ELSE_CHECK_KEYSYM_PRESSED(event, XK_Left)
         {
             if(event.state & ShiftMask && event.state & ControlMask)
-                window->resize_window_absolute(std::max((int)manipulating_window_geometry.width - EshyWMConfig::window_width_resize_step, 10), manipulating_window_geometry.height);
+                window->resize_window_absolute(std::max((int)manipulating_window_geometry.width - EshyWMConfig::window_width_resize_step, 10), manipulating_window_geometry.height, false);
             else if(event.state & ShiftMask)
                 window->attempt_shift_monitor(WS_ANCHORED_LEFT);
             else if(event.state & ControlMask)
-                window->move_window_absolute(manipulating_window_geometry.x - EshyWMConfig::window_x_movement_step, manipulating_window_geometry.y);
+                window->move_window_absolute(manipulating_window_geometry.x - EshyWMConfig::window_x_movement_step, manipulating_window_geometry.y, false);
             else
                 window->anchor_window(WS_ANCHORED_LEFT);
         }
         ELSE_CHECK_KEYSYM_PRESSED(event, XK_Up)
         {
             if(event.state & ShiftMask && event.state & ControlMask)
-                window->resize_window_absolute(manipulating_window_geometry.width, std::max((int)manipulating_window_geometry.height - EshyWMConfig::window_height_resize_step, 10));
+                window->resize_window_absolute(manipulating_window_geometry.width, std::max((int)manipulating_window_geometry.height - EshyWMConfig::window_height_resize_step, 10), false);
             else if(event.state & ShiftMask)
                 window->attempt_shift_monitor(WS_ANCHORED_UP);
             else if(event.state & ControlMask)
-                window->move_window_absolute(manipulating_window_geometry.x, manipulating_window_geometry.y - EshyWMConfig::window_y_movement_step);
+                window->move_window_absolute(manipulating_window_geometry.x, manipulating_window_geometry.y - EshyWMConfig::window_y_movement_step, false);
             else
                 window->anchor_window(WS_ANCHORED_UP);
         }
         ELSE_CHECK_KEYSYM_PRESSED(event, XK_Right)
         {
             if(event.state & ShiftMask && event.state & ControlMask)
-                window->resize_window_absolute(std::max((int)manipulating_window_geometry.width + EshyWMConfig::window_width_resize_step, 10), manipulating_window_geometry.height);
+                window->resize_window_absolute(std::max((int)manipulating_window_geometry.width + EshyWMConfig::window_width_resize_step, 10), manipulating_window_geometry.height, false);
             else if(event.state & ShiftMask)
                 window->attempt_shift_monitor(WS_ANCHORED_RIGHT);
             else if(event.state & ControlMask)
-                window->move_window_absolute(manipulating_window_geometry.x + EshyWMConfig::window_x_movement_step, manipulating_window_geometry.y);
+                window->move_window_absolute(manipulating_window_geometry.x + EshyWMConfig::window_x_movement_step, manipulating_window_geometry.y, false);
             else
                 window->anchor_window(WS_ANCHORED_RIGHT);
         }
         ELSE_CHECK_KEYSYM_PRESSED(event, XK_Down)
         {
             if(event.state & ShiftMask && event.state & ControlMask)
-                window->resize_window_absolute(manipulating_window_geometry.width, std::max((int)manipulating_window_geometry.height + EshyWMConfig::window_height_resize_step, 10));
+                window->resize_window_absolute(manipulating_window_geometry.width, std::max((int)manipulating_window_geometry.height + EshyWMConfig::window_height_resize_step, 10), false);
             else if(event.state & ShiftMask)
                 window->attempt_shift_monitor(WS_ANCHORED_DOWN);
             else if(event.state & ControlMask)
-                window->move_window_absolute(manipulating_window_geometry.x, manipulating_window_geometry.y + EshyWMConfig::window_y_movement_step);
+                window->move_window_absolute(manipulating_window_geometry.x, manipulating_window_geometry.y + EshyWMConfig::window_y_movement_step, false);
             else
                 window->anchor_window(WS_ANCHORED_DOWN);
         }
@@ -675,7 +669,7 @@ void WindowManager::OnClientMessage(const XClientMessageEvent& event)
 
     if(std::shared_ptr<EshyWMWindow> window = window_list_contains_window(event.window))
         if(event.message_type == ATOM_STATE && (event.data.l[1] == ATOM_FULLSCREEN || event.data.l[2] == ATOM_FULLSCREEN))
-            window->fullscreen_window(event.data.l[0], event.data.l[0] ? WSCC_STORE_STATE : WSCC_MANUAL);
+            window->fullscreen_window(event.data.l[0]);
 }
 
 

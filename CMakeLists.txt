@@ -9,7 +9,7 @@ option(BUILD_SHARED_LIBS ON)
 find_package(X11 REQUIRED)
 
 set(BIN_NAME eshywm)
-set(SOURCE_FILES main.cpp system.cpp util.cpp config.cpp eshywm.cpp window.cpp window_manager.cpp menu_base.cpp context_menu.cpp taskbar.cpp switcher.cpp run_menu.cpp button.cpp)
+set(SOURCE_FILES main.cpp system.cpp util.cpp config.cpp eshywm.cpp window.cpp container.cpp window_manager.cpp menu_base.cpp switcher.cpp button.cpp)
 list(TRANSFORM SOURCE_FILES PREPEND ${CMAKE_CURRENT_SOURCE_DIR}/source/)
 
 add_executable(${BIN_NAME} ${SOURCE_FILES})

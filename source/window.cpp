@@ -9,34 +9,17 @@
 #include "button.h"
 #include "taskbar.h"
 #include "switcher.h"
+#include "util.h"
 
 #include <algorithm>
 #include <cstring>
 #include <fstream>
+#include <span>
 
-#define GRAB_KEY(key, main_modifier, window) \
-    XGrabKey(DISPLAY, key, main_modifier, window, false, GrabModeAsync, GrabModeAsync); \
-    XGrabKey(DISPLAY, key, main_modifier | Mod2Mask, window, false, GrabModeAsync, GrabModeAsync); \
-    XGrabKey(DISPLAY, key, main_modifier | LockMask, window, false, GrabModeAsync, GrabModeAsync); \
-    XGrabKey(DISPLAY, key, main_modifier | Mod2Mask | LockMask, window, false, GrabModeAsync, GrabModeAsync);
-
-#define UNGRAB_KEY(key, main_modifier, window) \
-    XUngrabKey(DISPLAY, key, main_modifier, window); \
-    XUngrabKey(DISPLAY, key, main_modifier | Mod2Mask, window); \
-    XUngrabKey(DISPLAY, key, main_modifier | LockMask, window); \
-    XUngrabKey(DISPLAY, key, main_modifier | Mod2Mask | LockMask, window);
-
-#define GRAB_BUTTON(button, main_modifier, window, masks) \
-    XGrabButton(DISPLAY, button, main_modifier, window, false, masks, GrabModeAsync, GrabModeAsync, None, None); \
-    XGrabButton(DISPLAY, button, main_modifier | Mod2Mask, window, false, masks, GrabModeAsync, GrabModeAsync, None, None); \
-    XGrabButton(DISPLAY, button, main_modifier | LockMask, window, false, masks, GrabModeAsync, GrabModeAsync, None, None); \
-    XGrabButton(DISPLAY, button, main_modifier | Mod2Mask | LockMask, window, false, masks, GrabModeAsync, GrabModeAsync, None, None);
-
-#define UNGRAB_BUTTON(button, main_modifier, window) \
-    XUngrabButton(DISPLAY, button, main_modifier, window); \
-    XUngrabButton(DISPLAY, button, main_modifier | Mod2Mask, window); \
-    XUngrabButton(DISPLAY, button, main_modifier | LockMask, window); \
-    XUngrabButton(DISPLAY, button, main_modifier | Mod2Mask | LockMask, window);
+constexpr int half_of(const int x)
+{
+    return x / 2;
+}
 
 static bool retrieve_window_icon(Window window, Imlib_Image* icon)
 {
@@ -117,8 +100,9 @@ static bool retrieve_window_icon(Window window, Imlib_Image* icon)
     return false;
 }
 
-EshyWMWindow::EshyWMWindow(Window _window, bool _b_force_no_titlebar)
+EshyWMWindow::EshyWMWindow(Window _window, Workspace* _workspace, bool _b_force_no_titlebar)
     : window(_window)
+    , parent_workspace(_workspace)
     , b_force_no_titlebar(_b_force_no_titlebar)
     , b_show_titlebar(!_b_force_no_titlebar)
     , window_icon(nullptr)
@@ -138,35 +122,29 @@ EshyWMWindow::~EshyWMWindow()
     cairo_destroy(cairo_context);
 }
 
+
 void EshyWMWindow::frame_window(XWindowAttributes attr)
 {
-    pre_state_change_geometry = frame_geometry = {attr.x, attr.y, (uint)attr.width, (uint)(attr.height + EshyWMConfig::titlebar_height)};
+    frame_geometry = {attr.x, attr.y, (uint)attr.width, (uint)(attr.height + EshyWMConfig::titlebar_height)};
+    pre_state_change_geometry = frame_geometry;
+
     frame = XCreateSimpleWindow(DISPLAY, ROOT, frame_geometry.x, frame_geometry.y, frame_geometry.width, frame_geometry.height, EshyWMConfig::window_frame_border_width, EshyWMConfig::window_frame_border_color, EshyWMConfig::window_background_color);
-    XSelectInput(DISPLAY, frame, SubstructureNotifyMask | SubstructureRedirectMask | EnterWindowMask);
     //Resize because in case we use the * 0.9 version of height, then the bottom is cut off
     XResizeWindow(DISPLAY, window, attr.width, attr.height);
     XReparentWindow(DISPLAY, window, frame, 0, (!b_force_no_titlebar ? EshyWMConfig::titlebar_height : 0));
+    XSelectInput(DISPLAY, frame, EnterWindowMask);
     XMapWindow(DISPLAY, frame);
 
-    XSelectInput(DISPLAY, window, PropertyChangeMask);
+    XSelectInput(DISPLAY, window, PointerMotionMask | StructureNotifyMask | PropertyChangeMask);
 
-    majority_monitor(frame_geometry, current_monitor);
     set_window_state(WS_NORMAL);
 
     //Set frame class to match the window
-    Atom ATOM_CLASS = XInternAtom(DISPLAY, "WM_CLASS", False);
+    const XPropertyReturn class_property = get_xwindow_property(DISPLAY, window, atoms.window_class);
+    if(class_property.status == Success && class_property.type != None && class_property.format == 8)
+        XChangeProperty(DISPLAY, frame, atoms.window_class, XA_STRING, 8, PropModeReplace, (unsigned char*)class_property.property_value, strlen((const char*)class_property.property_value));
 
-    Atom type;
-    int format;
-    unsigned long n_items;
-    unsigned long bytes_after;
-    unsigned char* property_value = NULL;
-    int status = XGetWindowProperty(DISPLAY, window, ATOM_CLASS, 0, 1024, False, AnyPropertyType, &type, &format, &n_items, &bytes_after, &property_value);
-
-    if(status == Success && type != None && format == 8)
-        XChangeProperty(DISPLAY, frame, ATOM_CLASS, XA_STRING, 8, PropModeReplace, reinterpret_cast<const unsigned char*>(property_value), strlen(reinterpret_cast<const char*>(property_value)));
-
-    XFree(property_value);
+    XFree(class_property.property_value);
     XFlush(DISPLAY);
 
     if(!b_force_no_titlebar)
@@ -181,7 +159,7 @@ void EshyWMWindow::frame_window(XWindowAttributes attr)
         const Rect initial_size = {0, 0, EshyWMConfig::titlebar_button_size, EshyWMConfig::titlebar_button_size};
         const button_color_data close_button_color = {EshyWMConfig::titlebar_button_normal_color, EshyWMConfig::close_button_color, EshyWMConfig::titlebar_button_pressed_color};
         close_button = std::make_shared<ImageButton>(titlebar, initial_size, close_button_color, EshyWMConfig::close_button_image_path.c_str());
-        close_button->click_callback = std::bind(std::mem_fn(&EshyWMWindow::close_window), this, nullptr);
+        close_button->click_callback = std::bind(std::mem_fn(&EshyWMWindow::close_window), this);
     }
 
     update_titlebar();
@@ -204,79 +182,25 @@ void EshyWMWindow::unframe_window()
     }
 }
 
-void EshyWMWindow::setup_grab_events()
+
+void EshyWMWindow::set_window_state(EWindowState new_window_state)
 {
-    //Basic movement and resizing
-    XGrabButton(DISPLAY, Button1, AnyModifier, frame, false, ButtonPressMask, GrabModeSync, GrabModeAsync, None, None);
-    GRAB_BUTTON(Button1, Mod4Mask, frame, ButtonReleaseMask | ButtonMotionMask);
-    GRAB_BUTTON(Button3, Mod4Mask, frame, ButtonReleaseMask | ButtonMotionMask);
-    GRAB_BUTTON(Button1, AnyModifier, titlebar, ButtonPressMask | ButtonReleaseMask | ButtonMotionMask);
-    GRAB_BUTTON(Button3, AnyModifier, titlebar, ButtonPressMask);
-
-    //Basic functions
-    GRAB_KEY(XKeysymToKeycode(DISPLAY, XK_c | XK_C), Mod4Mask, frame);
-    GRAB_KEY(XKeysymToKeycode(DISPLAY, XK_d | XK_D), Mod4Mask, frame);
-    GRAB_KEY(XKeysymToKeycode(DISPLAY, XK_f | XK_F), Mod4Mask, frame);
-    GRAB_KEY(XKeysymToKeycode(DISPLAY, XK_a | XK_A), Mod4Mask, frame);
-
-    GRAB_KEY(XKeysymToKeycode(DISPLAY, XK_Left), Mod4Mask, frame);
-    GRAB_KEY(XKeysymToKeycode(DISPLAY, XK_Up), Mod4Mask, frame);
-    GRAB_KEY(XKeysymToKeycode(DISPLAY, XK_Right), Mod4Mask, frame);
-    GRAB_KEY(XKeysymToKeycode(DISPLAY, XK_Down), Mod4Mask, frame);
-
-    GRAB_KEY(XKeysymToKeycode(DISPLAY, XK_Left), Mod4Mask | ShiftMask, frame);
-    GRAB_KEY(XKeysymToKeycode(DISPLAY, XK_Up), Mod4Mask | ShiftMask, frame);
-    GRAB_KEY(XKeysymToKeycode(DISPLAY, XK_Right), Mod4Mask | ShiftMask, frame);
-    GRAB_KEY(XKeysymToKeycode(DISPLAY, XK_Down), Mod4Mask | ShiftMask, frame);
-
-    GRAB_KEY(XKeysymToKeycode(DISPLAY, XK_Left), Mod4Mask | ControlMask, frame);
-    GRAB_KEY(XKeysymToKeycode(DISPLAY, XK_Up), Mod4Mask | ControlMask, frame);
-    GRAB_KEY(XKeysymToKeycode(DISPLAY, XK_Right), Mod4Mask | ControlMask, frame);
-    GRAB_KEY(XKeysymToKeycode(DISPLAY, XK_Down), Mod4Mask | ControlMask, frame);
-
-    GRAB_KEY(XKeysymToKeycode(DISPLAY, XK_Left), Mod4Mask | ShiftMask | ControlMask, frame);
-    GRAB_KEY(XKeysymToKeycode(DISPLAY, XK_Up), Mod4Mask | ShiftMask | ControlMask, frame);
-    GRAB_KEY(XKeysymToKeycode(DISPLAY, XK_Right), Mod4Mask | ShiftMask | ControlMask, frame);
-    GRAB_KEY(XKeysymToKeycode(DISPLAY, XK_Down), Mod4Mask | ShiftMask | ControlMask, frame);
-
-    GRAB_KEY(XKeysymToKeycode(DISPLAY, XK_o | XK_O), Mod4Mask, frame);
-    GRAB_KEY(XKeysymToKeycode(DISPLAY, XK_i | XK_I), Mod4Mask, frame);
+    const std::unordered_map<EWindowState, const char*> states = {
+        {WS_NONE, "none"},
+        {WS_NORMAL, "normal"},
+        {WS_MINIMIZED, "minimized"},
+        {WS_MAXIMIZED, "maximized"},
+        {WS_FULLSCREEN, "fullscreen"},
+        {WS_ANCHORED_LEFT, "anchored_left"},
+        {WS_ANCHORED_UP, "anchored_up"},
+        {WS_ANCHORED_RIGHT, "anchored_right"},
+        {WS_ANCHORED_DOWN, "anchored_down"}
+    };
+    
+    XStoreName(DISPLAY, frame, states.at(new_window_state));
+    previous_state = window_state;
+    window_state = new_window_state;
 }
-
-void EshyWMWindow::remove_grab_events()
-{
-    //Basic movement and resizing
-    UNGRAB_BUTTON(Button1, AnyModifier, frame);
-    UNGRAB_BUTTON(Button1, Mod4Mask, frame);
-    UNGRAB_BUTTON(Button3, Mod4Mask, frame);
-    UNGRAB_BUTTON(Button1, AnyModifier, titlebar);
-    UNGRAB_BUTTON(Button3, AnyModifier, titlebar);
-
-    //Basic functions
-    UNGRAB_KEY(XKeysymToKeycode(DISPLAY, XK_c | XK_C), Mod4Mask, frame);
-    UNGRAB_KEY(XKeysymToKeycode(DISPLAY, XK_d | XK_D), Mod4Mask, frame);
-    UNGRAB_KEY(XKeysymToKeycode(DISPLAY, XK_f | XK_F), Mod4Mask, frame);
-    UNGRAB_KEY(XKeysymToKeycode(DISPLAY, XK_a | XK_A), Mod4Mask, frame);
-
-    UNGRAB_KEY(XKeysymToKeycode(DISPLAY, XK_Left), Mod4Mask, frame);
-    UNGRAB_KEY(XKeysymToKeycode(DISPLAY, XK_Up), Mod4Mask, frame);
-    UNGRAB_KEY(XKeysymToKeycode(DISPLAY, XK_Right), Mod4Mask, frame);
-    UNGRAB_KEY(XKeysymToKeycode(DISPLAY, XK_Down), Mod4Mask, frame);
-
-    UNGRAB_KEY(XKeysymToKeycode(DISPLAY, XK_Left), Mod4Mask | ShiftMask, frame);
-    UNGRAB_KEY(XKeysymToKeycode(DISPLAY, XK_Up), Mod4Mask | ShiftMask, frame);
-    UNGRAB_KEY(XKeysymToKeycode(DISPLAY, XK_Right), Mod4Mask | ShiftMask, frame);
-    UNGRAB_KEY(XKeysymToKeycode(DISPLAY, XK_Down), Mod4Mask | ShiftMask, frame);
-
-    UNGRAB_KEY(XKeysymToKeycode(DISPLAY, XK_Left), Mod4Mask | ControlMask, frame);
-    UNGRAB_KEY(XKeysymToKeycode(DISPLAY, XK_Up), Mod4Mask | ControlMask, frame);
-    UNGRAB_KEY(XKeysymToKeycode(DISPLAY, XK_Right), Mod4Mask | ControlMask, frame);
-    UNGRAB_KEY(XKeysymToKeycode(DISPLAY, XK_Down), Mod4Mask | ControlMask, frame);
-
-    UNGRAB_KEY(XKeysymToKeycode(DISPLAY, XK_o | XK_O), Mod4Mask, frame);
-    UNGRAB_KEY(XKeysymToKeycode(DISPLAY, XK_i | XK_I), Mod4Mask, frame);
-}
-
 
 void EshyWMWindow::minimize_window(bool b_minimize)
 {
@@ -288,6 +212,10 @@ void EshyWMWindow::minimize_window(bool b_minimize)
     }
     else if (!b_minimize && window_state == WS_MINIMIZED)
     {
+        //Do not raise if parent workspace is not active
+        if(!parent_workspace->b_is_active)
+            return;
+
         set_window_state(previous_state);
         XMapWindow(DISPLAY, get_frame());
         update_titlebar();
@@ -295,6 +223,8 @@ void EshyWMWindow::minimize_window(bool b_minimize)
         //Restore the window to its previous state
         if (window_state == WS_MAXIMIZED)
             maximize_window(true);
+        else if (window_state == WS_FULLSCREEN)
+            fullscreen_window(true);
         else if (window_state >= WS_ANCHORED_LEFT)
             anchor_window(window_state);
     }
@@ -304,17 +234,13 @@ void EshyWMWindow::maximize_window(bool b_maximize)
 {
     if(b_maximize && window_state != WS_MAXIMIZED)
     {
-        std::shared_ptr<s_monitor_info> monitor;
-        if(!majority_monitor(frame_geometry, monitor))
-            return;
-        
         fullscreen_window(false);
 
         if (window_state == WS_NORMAL)
             pre_state_change_geometry = frame_geometry;
 
-        move_window_absolute(monitor->x, monitor->y, true);
-        resize_window_absolute(monitor->width - (EshyWMConfig::window_frame_border_width * 2), (monitor->height - EshyWMConfig::taskbar_height) - (EshyWMConfig::window_frame_border_width * 2), true);
+        move_window_absolute(parent_workspace->geometry.x, parent_workspace->geometry.y, true);
+        resize_window_absolute(parent_workspace->geometry.width - (EshyWMConfig::window_frame_border_width * 2), parent_workspace->geometry.height - (EshyWMConfig::window_frame_border_width * 2), true);
         set_window_state(WS_MAXIMIZED);
     }
     else if (!b_maximize && window_state == WS_MAXIMIZED)
@@ -328,30 +254,20 @@ void EshyWMWindow::maximize_window(bool b_maximize)
 void EshyWMWindow::fullscreen_window(bool b_fullscreen)
 {
     if(b_fullscreen && window_state != WS_FULLSCREEN)
-    {        
-        if(!majority_monitor(frame_geometry, current_monitor))
-            return;
-
+    {
         if (window_state == WS_NORMAL)
             pre_state_change_geometry = frame_geometry;
         
         set_show_titlebar(false);
-
-        current_monitor->taskbar->show_taskbar(false);
-        move_window_absolute(current_monitor->x, current_monitor->y, true);
-        resize_window_absolute(current_monitor->width, current_monitor->height, true);
-
+        move_window_absolute(parent_workspace->parent_output->geometry.x, parent_workspace->parent_output->geometry.y, true);
+        resize_window_absolute(parent_workspace->parent_output->geometry.width, parent_workspace->parent_output->geometry.height, true);
         set_window_state(WS_FULLSCREEN);
     }
     else if (!b_fullscreen && window_state == WS_FULLSCREEN)
     {
-        if(current_monitor)
-            current_monitor->taskbar->show_taskbar(true);
-
         set_show_titlebar(true);
         move_window_absolute(pre_state_change_geometry.x, pre_state_change_geometry.y, true);
         resize_window_absolute(pre_state_change_geometry.width, pre_state_change_geometry.height, true);
-        
         set_window_state(previous_state);
 
         //Restore the window to its previous state
@@ -360,34 +276,37 @@ void EshyWMWindow::fullscreen_window(bool b_fullscreen)
             window_state = WS_NONE;
             maximize_window(true);
         }
+        else if (window_state == WS_FULLSCREEN)
+        {
+            window_state = WS_NONE;
+            fullscreen_window(true);
+        }
         else if (window_state >= WS_ANCHORED_LEFT)
             anchor_window(window_state);
     }
 }
 
-void EshyWMWindow::close_window(void* null)
+void EshyWMWindow::close_window()
 {
     XUnmapWindow(DISPLAY, window);
-    
-    remove_grab_events();
     unframe_window();
 
     Atom* supported_protocols;
     int num_supported_protocols;
 
-    static const Atom wm_delete_window = XInternAtom(DISPLAY, "WM_DELETE_WINDOW", false);
+    //This is not a typical status return. This one is zero when it fails.
+    const int status = XGetWMProtocols(DISPLAY, window, &supported_protocols, &num_supported_protocols);
 
-    if (XGetWMProtocols(DISPLAY, window, &supported_protocols, &num_supported_protocols) && (std::find(supported_protocols, supported_protocols + num_supported_protocols, wm_delete_window) != supported_protocols + num_supported_protocols))
+    const bool b_protocol_exists = std::ranges::contains(std::span(supported_protocols, num_supported_protocols), atoms.wm_delete_window);
+    if (status && b_protocol_exists)
     {
-        static const Atom wm_protocols = XInternAtom(DISPLAY, "WM_PROTOCOLS", false);
-
         XEvent message;
         memset(&message, 0, sizeof(message));
         message.xclient.type = ClientMessage;
-        message.xclient.message_type = wm_protocols;
+        message.xclient.message_type = atoms.wm_protocols;
         message.xclient.window = window;
         message.xclient.format = 32;
-        message.xclient.data.l[0] = wm_delete_window;
+        message.xclient.data.l[0] = atoms.wm_delete_window;
         XSendEvent(DISPLAY, window, false, 0 , &message);
     }
     else
@@ -395,19 +314,15 @@ void EshyWMWindow::close_window(void* null)
         XKillClient(DISPLAY, window);
     }
 
-    Atom ATOM_CLASS = XInternAtom(DISPLAY, "WM_CLASS", False);
-
-    Atom type;
-    int format;
-    unsigned long n_items;
-    unsigned long bytes_after;
-    unsigned char* property_value = NULL;
-    int status = XGetWindowProperty(DISPLAY, get_window(), ATOM_CLASS, 0, 1024, False, AnyPropertyType, &type, &format, &n_items, &bytes_after, &property_value);
-
-    EshyWMConfig::add_window_close_state(std::string(reinterpret_cast<const char*>(property_value)), get_window_state() == EWindowState::WS_MAXIMIZED ? "maximized" : "normal");
+    const XPropertyReturn property = get_xwindow_property(DISPLAY, window, atoms.window_class);
+    if(property.status == Success)
+    {
+        EshyWMConfig::add_window_close_state((const char*)property.property_value, get_window_state() == EWindowState::WS_MAXIMIZED ? "maximized" : "normal");
+    }
 }
 
-void EshyWMWindow::anchor_window(EWindowState anchor, std::shared_ptr<s_monitor_info> monitor_override)
+
+void EshyWMWindow::anchor_window(EWindowState anchor, Output* output_override)
 {
     if(window_state == anchor)
     {
@@ -415,10 +330,6 @@ void EshyWMWindow::anchor_window(EWindowState anchor, std::shared_ptr<s_monitor_
         return;
     }
 
-    std::shared_ptr<s_monitor_info> monitor_info = monitor_override;
-    if(!monitor_override && !majority_monitor(get_frame_geometry(), monitor_info))
-        return;
-    
     if(window_state == WS_NORMAL)
         pre_state_change_geometry = frame_geometry;
 
@@ -426,30 +337,30 @@ void EshyWMWindow::anchor_window(EWindowState anchor, std::shared_ptr<s_monitor_
     {
     case WS_ANCHORED_LEFT:
     {
-        if (window_state == WS_ANCHORED_RIGHT && !monitor_override) goto set_normal;
-        move_window_absolute(monitor_info->x, monitor_info->y, true);
-        resize_window_absolute(monitor_info->width / 2, monitor_info->height - EshyWMConfig::taskbar_height, true);
+        if (window_state == WS_ANCHORED_RIGHT && !output_override) goto set_normal;
+        move_window_absolute(parent_workspace->geometry.x, parent_workspace->geometry.y, true);
+        resize_window_absolute(half_of(parent_workspace->geometry.width), parent_workspace->geometry.height, true);
         break;
     }
     case WS_ANCHORED_UP:
     {
-        if (window_state == WS_ANCHORED_DOWN && !monitor_override) goto set_normal;
-        move_window_absolute(monitor_info->x, monitor_info->y, true);
-        resize_window_absolute(monitor_info->width, (monitor_info->height - EshyWMConfig::taskbar_height) / 2, true);
+        if (window_state == WS_ANCHORED_DOWN && !output_override) goto set_normal;
+        move_window_absolute(parent_workspace->geometry.x, parent_workspace->geometry.y, true);
+        resize_window_absolute(parent_workspace->geometry.width, half_of(parent_workspace->geometry.height), true);
         break;
     }
     case WS_ANCHORED_RIGHT:
     {
-        if (window_state == WS_ANCHORED_LEFT && !monitor_override) goto set_normal;
-        move_window_absolute(monitor_info->x + (monitor_info->width / 2), monitor_info->y, true);
-        resize_window_absolute(monitor_info->width / 2, monitor_info->height - EshyWMConfig::taskbar_height, true);
+        if (window_state == WS_ANCHORED_LEFT && !output_override) goto set_normal;
+        move_window_absolute(parent_workspace->geometry.x + half_of(parent_workspace->geometry.width), parent_workspace->geometry.y, true);
+        resize_window_absolute(half_of(parent_workspace->geometry.width), parent_workspace->geometry.height, true);
         break;
     }
     case WS_ANCHORED_DOWN:
     {
-        if (window_state == WS_ANCHORED_UP && !monitor_override) goto set_normal;
-        move_window_absolute(monitor_info->x, monitor_info->y + ((monitor_info->height - EshyWMConfig::taskbar_height) / 2), true);
-        resize_window_absolute(monitor_info->width, (monitor_info->height - EshyWMConfig::taskbar_height) / 2, true);
+        if (window_state == WS_ANCHORED_UP && !output_override) goto set_normal;
+        move_window_absolute(parent_workspace->geometry.x, parent_workspace->geometry.y + half_of(parent_workspace->geometry.height), true);
+        resize_window_absolute(parent_workspace->geometry.width, half_of(parent_workspace->geometry.height), true);
         break;
     }
     case WS_NORMAL:
@@ -467,10 +378,6 @@ set_normal:
 
 void EshyWMWindow::attempt_shift_monitor_anchor(EWindowState direction)
 {
-    std::shared_ptr<s_monitor_info> monitor_info;
-    if(!majority_monitor(get_frame_geometry(), monitor_info))
-        return;
-
     int test_x = 0;
     int test_y = 0;
     EWindowState anchor = WS_NONE;
@@ -480,55 +387,49 @@ void EshyWMWindow::attempt_shift_monitor_anchor(EWindowState direction)
     {
     case WS_ANCHORED_LEFT:
     {
-        test_x = monitor_info->x - 10;
-        test_y = monitor_info->y;
+        test_x = parent_workspace->parent_output->geometry.x - 10;
+        test_y = parent_workspace->parent_output->geometry.y;
         anchor = WS_ANCHORED_RIGHT;
-        new_pre_state_change_geometry.x -= current_monitor->width;
+        new_pre_state_change_geometry.x -= parent_workspace->parent_output->geometry.width;
         break;
     }
     case WS_ANCHORED_UP:
     {
-        test_x = monitor_info->x;
-        test_y = monitor_info->y - 10;
+        test_x = parent_workspace->parent_output->geometry.x;
+        test_y = parent_workspace->parent_output->geometry.y - 10;
         anchor = WS_ANCHORED_DOWN;
-        new_pre_state_change_geometry.y -= current_monitor->height;
+        new_pre_state_change_geometry.y -= parent_workspace->parent_output->geometry.height;
         break;
     }
     case WS_ANCHORED_RIGHT:
     {
-        test_x = monitor_info->x + monitor_info->width + 10;
-        test_y = monitor_info->y;
+        test_x = parent_workspace->parent_output->geometry.x + parent_workspace->parent_output->geometry.width + 10;
+        test_y = parent_workspace->parent_output->geometry.y;
         anchor = WS_ANCHORED_LEFT;
-        new_pre_state_change_geometry.x += current_monitor->width;
+        new_pre_state_change_geometry.x += parent_workspace->parent_output->geometry.width;
         break;
     }
     case WS_ANCHORED_DOWN:
     {
-        test_x = monitor_info->x;
-        test_y = monitor_info->y + monitor_info->height + 10;
+        test_x = parent_workspace->parent_output->geometry.x;
+        test_y = parent_workspace->parent_output->geometry.y + parent_workspace->parent_output->geometry.height + 10;
         anchor = WS_ANCHORED_UP;
-        new_pre_state_change_geometry.y += current_monitor->height;
+        new_pre_state_change_geometry.y += parent_workspace->parent_output->geometry.height;
         break;
     }
     };
 
-    std::shared_ptr<s_monitor_info> new_monitor_info;
-    if(position_in_monitor(test_x, test_y, new_monitor_info))
+    if(Output* new_output = output_at_position(test_x, test_y))
     {
         pre_state_change_geometry = new_pre_state_change_geometry;
-        pre_state_change_geometry.width *= current_monitor->width / new_monitor_info->width;
-        pre_state_change_geometry.height *= current_monitor->height / new_monitor_info->height;
-        anchor_window(anchor, new_monitor_info);
-        current_monitor = new_monitor_info;
+        pre_state_change_geometry.width *= parent_workspace->parent_output->geometry.width / new_output->geometry.width;
+        pre_state_change_geometry.height *= parent_workspace->parent_output->geometry.height / new_output->geometry.height;
+        anchor_window(anchor, new_output);
     }
 }
 
 void EshyWMWindow::attempt_shift_monitor(EWindowState direction)
 {
-    std::shared_ptr<s_monitor_info> monitor_info;
-    if(!majority_monitor(get_frame_geometry(), monitor_info))
-        return;
-
     int test_x = 0;
     int test_y = 0;
     Rect new_pre_state_change_geometry = pre_state_change_geometry;
@@ -537,42 +438,40 @@ void EshyWMWindow::attempt_shift_monitor(EWindowState direction)
     {
     case WS_ANCHORED_LEFT:
     {
-        test_x = monitor_info->x - 10;
-        test_y = monitor_info->y;
-        new_pre_state_change_geometry.x -= current_monitor->width;
+        test_x = parent_workspace->parent_output->geometry.x - 10;
+        test_y = parent_workspace->parent_output->geometry.y;
+        new_pre_state_change_geometry.x -= parent_workspace->parent_output->geometry.width;
         break;
     }
     case WS_ANCHORED_UP:
     {
-        test_x = monitor_info->x;
-        test_y = monitor_info->y - 10;
-        new_pre_state_change_geometry.y -= current_monitor->height;
+        test_x = parent_workspace->parent_output->geometry.x;
+        test_y = parent_workspace->parent_output->geometry.y - 10;
+        new_pre_state_change_geometry.y -= parent_workspace->parent_output->geometry.height;
         break;
     }
     case WS_ANCHORED_RIGHT:
     {
-        test_x = monitor_info->x + monitor_info->width + 10;
-        test_y = monitor_info->y;
-        new_pre_state_change_geometry.x += current_monitor->width;
+        test_x = parent_workspace->parent_output->geometry.x + parent_workspace->parent_output->geometry.width + 10;
+        test_y = parent_workspace->parent_output->geometry.y;
+        new_pre_state_change_geometry.x += parent_workspace->parent_output->geometry.width;
         break;
     }
     case WS_ANCHORED_DOWN:
     {
-        test_x = monitor_info->x;
-        test_y = monitor_info->y + monitor_info->height + 10;
-        new_pre_state_change_geometry.y += current_monitor->height;
+        test_x = parent_workspace->parent_output->geometry.x;
+        test_y = parent_workspace->parent_output->geometry.y + parent_workspace->parent_output->geometry.height + 10;
+        new_pre_state_change_geometry.y += parent_workspace->parent_output->geometry.height;
         break;
     }
     };
 
-    std::shared_ptr<s_monitor_info> new_monitor_info;
-    if(position_in_monitor(test_x, test_y, new_monitor_info))
+    if(Output* output = output_at_position(test_x, test_y))
     {
         pre_state_change_geometry = new_pre_state_change_geometry;
-        pre_state_change_geometry.width *= current_monitor->width / new_monitor_info->width;
-        pre_state_change_geometry.height *= current_monitor->height / new_monitor_info->height;
+        pre_state_change_geometry.width *= parent_workspace->parent_output->geometry.width / output->geometry.width;
+        pre_state_change_geometry.height *= parent_workspace->parent_output->geometry.height / output->geometry.height;
         move_window_absolute(pre_state_change_geometry.x, pre_state_change_geometry.y, false);
-        current_monitor = new_monitor_info;
     }
 }
 
@@ -585,14 +484,19 @@ void EshyWMWindow::move_window_absolute(int new_position_x, int new_position_y, 
             maximize_window(false);
         else if(window_state == WS_FULLSCREEN)
             fullscreen_window(false);
+        else if(window_state >= WS_ANCHORED_LEFT)
+            anchor_window(WS_NORMAL);
     }
-
-    if(window_state >= WS_ANCHORED_LEFT)
-        anchor_window(WS_NORMAL);
 
     frame_geometry.x = new_position_x;
     frame_geometry.y = new_position_y;
     XMoveWindow(DISPLAY, frame, new_position_x, new_position_y);
+
+    //Update the workspace it is in
+    if(Output* output = output_most_occupied(frame_geometry))
+    {
+        parent_workspace = output->active_workspace;
+    }
 }
 
 void EshyWMWindow::resize_window_absolute(uint new_size_x, uint new_size_y, bool b_skip_state_checks)
@@ -608,48 +512,16 @@ void EshyWMWindow::resize_window_absolute(uint new_size_x, uint new_size_y, bool
     frame_geometry.width = new_size_x;
     frame_geometry.height = new_size_y;
 
-    XResizeWindow(DISPLAY, frame, frame_geometry.width, frame_geometry.height);
+    XResizeWindow(DISPLAY, frame, new_size_x, new_size_y);
     XResizeWindow(DISPLAY, window, new_size_x, new_size_y - (b_show_titlebar ? EshyWMConfig::titlebar_height : 0));
     XResizeWindow(DISPLAY, titlebar, new_size_x, EshyWMConfig::titlebar_height);
     update_titlebar();
+
+    //Update the workspace it is in
+    if(Output* output = output_most_occupied(frame_geometry))
+        parent_workspace = output->active_workspace;
 }
 
-
-void EshyWMWindow::set_window_state(EWindowState new_window_state)
-{
-    char new_state_name[16] = "";
-    switch (new_window_state)
-    {
-    case WS_NORMAL:
-        strcpy(new_state_name, "normal");
-        break;
-    case WS_MINIMIZED:
-        strcpy(new_state_name, "minimized");
-        break;
-    case WS_MAXIMIZED:
-        strcpy(new_state_name, "maximized");
-        break;
-    case WS_FULLSCREEN:
-        strcpy(new_state_name, "fullscreen");
-        break;
-    case WS_ANCHORED_LEFT:
-        strcpy(new_state_name, "anchored_left");
-        break;
-    case WS_ANCHORED_UP:
-        strcpy(new_state_name, "anchored_up");
-        break;
-    case WS_ANCHORED_RIGHT:
-        strcpy(new_state_name, "anchored_right");
-        break;
-    case WS_ANCHORED_DOWN:
-        strcpy(new_state_name, "anchored_down");
-        break;
-    };
-    
-    XStoreName(DISPLAY, frame, new_state_name);
-    previous_state = window_state;
-    window_state = new_window_state;
-}
 
 void EshyWMWindow::set_show_titlebar(bool b_new_show_titlebar)
 {
@@ -682,12 +554,11 @@ void EshyWMWindow::update_titlebar()
     XTextProperty name;
     XGetWMName(DISPLAY, window, &name);
 
-    //Draw title
     cairo_select_font_face(cairo_context, "Lato", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_NORMAL);
     cairo_set_font_size(cairo_context, 16);
     cairo_set_source_rgb(cairo_context, 1.0f, 1.0f, 1.0f);
     cairo_move_to(cairo_context, 10.0f, 16.0f);
-    cairo_show_text(cairo_context, reinterpret_cast<char*>(name.value));
+    cairo_show_text(cairo_context, (char*)name.value);
 
     const int button_y_offset = (EshyWMConfig::titlebar_height - EshyWMConfig::titlebar_button_size) / 2;
     close_button->set_position((frame_geometry.width - EshyWMConfig::titlebar_button_size) - button_y_offset, button_y_offset);

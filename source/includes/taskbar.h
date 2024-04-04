@@ -21,12 +21,12 @@ public:
     void update_button_positions();
     void show_taskbar(bool b_show);
 
-    void add_button(std::shared_ptr<class EshyWMWindow> associated_window, const Imlib_Image& icon);
-    void remove_button(std::shared_ptr<class EshyWMWindow> associated_window);
+    void add_button(class EshyWMWindow* associated_window, const Imlib_Image& icon);
+    void remove_button(class EshyWMWindow* associated_window);
 
     void display_system_info();
 
-    void on_taskbar_button_clicked(std::shared_ptr<EshyWMWindow> window);
+    void on_taskbar_button_clicked(EshyWMWindow* window);
 
     const std::vector<std::shared_ptr<class WindowButton>>& get_taskbar_buttons() const {return taskbar_buttons;}
     std::vector<std::shared_ptr<class WindowButton>>& get_taskbar_buttons() {return taskbar_buttons;}

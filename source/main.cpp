@@ -1,3 +1,4 @@
+
 #include "eshywm.h"
 
 #include <cstring>

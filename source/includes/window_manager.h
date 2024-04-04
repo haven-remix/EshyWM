@@ -1,80 +1,75 @@
 #pragma once
 
-#include <Imlib2.h>
-#include <memory>
-#include <mutex>
-#include <string>
-#include <vector>
-#include <unordered_map>
-
 #include "window.h"
 #include "util.h"
+#include "container.h"
 
-struct s_monitor_info
-{
-    s_monitor_info()
-        : b_primary(false)
-        , x(0)
-        , y(0)
-        , width(0)
-        , height(0)
-        , taskbar(nullptr)
-    {}
+#include <Imlib2.h>
 
-    s_monitor_info(bool _b_primary, int _x, int _y, uint _width, uint _height)
-        : b_primary(_b_primary)
-        , x(_x)
-        , y(_y)
-        , width(_width)
-        , height(_height)
-        , taskbar(nullptr)
-    {}
-    
-    bool b_primary;
-    int x;
-    int y;
-    uint width;
-    uint height;
-    std::shared_ptr<class EshyWMTaskbar> taskbar;
-};
+#include <vector>
 
-class EshyWMWindow;
-
+/**
+ * The window manager layout is as follows.
+ * WindowManager -> {Outputs, Workspaces}
+ * Workspaces -> Windows
+ * Outputs -> {Docks, Active Workspace} 
+ * 
+ * In WindowManager, we store a list of outputs and workspaces.
+ * Each output will have a top and bottom dock and space for the active workspace.
+ * 
+ * The Workspace list is not attached to any output. Only the actve workspace is.
+ * This means any output can grab any workspace as it choses, but only one at a time.
+ * 
+ * An output represents a monitor. A workspace is a arbitrary collection of windows used
+ * primarly for organzation.
+*/
 class WindowManager
 {
 public:
+
+    WindowManager()
+        : titlebar_double_click{0, 0, 0}
+        , click_cursor_position{0, 0}
+        , focused_window(nullptr)
+    {}
 
     void initialize();
     void handle_events();
     void handle_preexisting_windows();
 
-    void focus_window(std::shared_ptr<EshyWMWindow> window);
+    //Uses XRandR to scan outputs and generates relevant Outputs
+    void scan_outputs();
+
+    void focus_window(EshyWMWindow* window, bool b_raise);
 
     static Display* display;
 
-    const std::vector<std::shared_ptr<EshyWMWindow>>& get_window_list() const {return window_list;}
+    std::vector<Output*> outputs;
+    std::vector<Workspace*> workspaces;
+    std::vector<EshyWMWindow*> window_list;
+
+    EshyWMWindow* focused_window;
 
 private:
-
-    std::vector<std::shared_ptr<EshyWMWindow>> window_list;
-
-    //If user uses the minimize all function, then we store the minimized windows here to restore; since all the states will become minimized, we also need to store the state so we can restore it
-    std::unordered_map<std::shared_ptr<EshyWMWindow>, EWindowState> view_desktop_window_list;
 
     Pos click_cursor_position;
 
     struct double_click_data
     {
-        Window window;
+        EshyWMWindow* window;
         Time first_click_time;
         Time last_double_click_time;
     } titlebar_double_click;
     
     bool b_manipulating_with_keys = false;
-    bool b_at_bottom_right_corner = false;
+    bool b_manipulating_with_titlebar = false;
 
+    std::vector<Window> keep_raised;
     std::shared_ptr<class Button> currently_hovered_button;
     Rect manipulating_window_geometry;
+
+    void grab_keys();
+    void ungrab_keys();
 
     void OnDestroyNotify(const XDestroyWindowEvent& event);
     void OnMapNotify(const XMapEvent& event);
@@ -92,11 +87,10 @@ private:
     void OnEnterNotify(const XCrossingEvent& event);
     void OnClientMessage(const XClientMessageEvent& event);
 
-    std::shared_ptr<EshyWMWindow> window_list_contains_frame(Window frame);
-    std::shared_ptr<EshyWMWindow> window_list_contains_titlebar(Window titlebar);
-    std::shared_ptr<EshyWMWindow> window_list_contains_window(Window internal_window);
-    void remove_from_window_list(std::shared_ptr<EshyWMWindow> window);
+    EshyWMWindow* register_window(Window window, bool b_was_created_before_window_manager);
+    Dock* register_dock(Window window, bool b_was_created_before_window_manager);
 
-    std::shared_ptr<EshyWMWindow> register_window(Window window, bool b_was_created_before_window_manager);
     void handle_button_hovered(Window hovered_window, bool b_hovered, int mode);
+
+    EshyWMWindow* contains_xwindow(Window window);
 };

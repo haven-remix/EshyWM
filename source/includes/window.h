@@ -1,11 +1,14 @@
 #pragma once
 
-#include <cairo/cairo.h>
-
 #include "window_manager.h"
 #include "util.h"
 
-enum EWindowState : uint8_t
+#include <Imlib2.h>
+#include <cairo/cairo.h>
+
+typedef Window XWindow;
+
+enum EWindowState : uint16_t
 {
     WS_NONE,
     WS_NORMAL,
@@ -18,40 +21,31 @@ enum EWindowState : uint8_t
     WS_ANCHORED_DOWN
 };
 
-enum EWindowStateChangeCondition : uint8_t
-{
-    WSCC_MANUAL,
-    WSCC_FROM_MOVE,
-    WSCC_FROM_RESIZE,
-    WSCC_FROM_MAXIMIZE,
-    WSCC_FROM_FULLSCREEN,
-    WSCC_STORE_STATE
-};
-
 /**
  * Handles everything about an individual window
 */
-class EshyWMWindow : public std::enable_shared_from_this<EshyWMWindow>
+class EshyWMWindow
 {
 public:
 
-    EshyWMWindow(Window _window, bool _b_force_no_titlebar);
+    EshyWMWindow(Window _window, struct Workspace* _workspace, bool _b_force_no_titlebar);
     ~EshyWMWindow();
 
     void frame_window(XWindowAttributes attr);
     void unframe_window();
-    void setup_grab_events();
-    void remove_grab_events();
 
-    void toggle_minimize(void* null = nullptr) {minimize_window(get_window_state() != WS_MINIMIZED);}
-    void toggle_maximize(void* null = nullptr) {maximize_window(get_window_state() != WS_MAXIMIZED);}
-    void toggle_fullscreen(void* null = nullptr) {fullscreen_window(get_window_state() != WS_FULLSCREEN);}
+    void toggle_minimize() {minimize_window(get_window_state() != WS_MINIMIZED);}
+    void toggle_maximize() {maximize_window(get_window_state() != WS_MAXIMIZED);}
+    void toggle_fullscreen() {fullscreen_window(get_window_state() != WS_FULLSCREEN);}
 
+    //Window states
+    void set_window_state(EWindowState new_window_state);
     void minimize_window(bool b_minimize);
     void maximize_window(bool b_maximize);
     void fullscreen_window(bool b_fullscreen);
-    void close_window(void* null = nullptr);
-    void anchor_window(EWindowState anchor, std::shared_ptr<s_monitor_info> monitor_override = nullptr);
+    void close_window();
+
+    void anchor_window(EWindowState anchor, Output* output_override = nullptr);
     void attempt_shift_monitor_anchor(EWindowState direction);
     void attempt_shift_monitor(EWindowState direction);
 
@@ -63,15 +57,16 @@ public:
     void set_show_titlebar(bool b_new_show_titlebar);
 
     /**Getters*/
-    Window get_window() const {return window;}
-    Window get_frame() const {return frame;}
-    Window get_titlebar() const {return titlebar;}
-    Rect get_frame_geometry() const {return frame_geometry;}
-    Imlib_Image get_window_icon() const {return window_icon;}
-    EWindowState get_window_state() const {return window_state;}
-    void set_window_state(EWindowState new_window_state);
+    const Window get_window() const {return window;}
+    const Window get_frame() const {return frame;}
+    const Window get_titlebar() const {return titlebar;}
+    const Rect& get_frame_geometry() const {return frame_geometry;}
+    const Imlib_Image get_window_icon() const {return window_icon;}
+    const EWindowState get_window_state() const {return window_state;}
 
     std::shared_ptr<class WindowButton> get_close_button() const {return close_button;}
+
+    Workspace* parent_workspace;
 
 private:
 
@@ -82,8 +77,6 @@ private:
     Rect frame_geometry;
     Rect pre_state_change_geometry;
     EWindowState previous_state;
-
-    std::shared_ptr<s_monitor_info> current_monitor;
 
     EWindowState window_state;
     bool b_show_titlebar;

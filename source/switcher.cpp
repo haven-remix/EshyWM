@@ -32,9 +32,17 @@ EshyWMSwitcher::EshyWMSwitcher(Rect _menu_geometry, Color _menu_color) : EshyWMM
     XChangeProperty(DISPLAY, menu_window, ATOM_CLASS, XA_STRING, 8, PropModeReplace, reinterpret_cast<const unsigned char*>(class_name), strlen(class_name));
     XFlush(DISPLAY);
 
-    XGrabButton(DISPLAY, Button1, AnyModifier, menu_window, false, ButtonPressMask | ButtonReleaseMask, GrabModeAsync, GrabModeAsync, None, None);
-    XGrabKey(DISPLAY, XKeysymToKeycode(DISPLAY, XK_Tab), Mod4Mask, ROOT, false, GrabModeAsync, GrabModeAsync);
-    XGrabKey(DISPLAY, XKeysymToKeycode(DISPLAY, XK_Alt_L), AnyModifier, ROOT, false, GrabModeAsync, GrabModeAsync);
+    XGrabButton(DISPLAY, Button1, AnyModifier, menu_window, false, ButtonReleaseMask, GrabModeAsync, GrabModeAsync, None, None);
+    
+    /**
+     * IMPORTANT: Keys do not send a release event if the key was registered after being pressed.
+     * 
+     * I cannot grab alt with GrabModeSync because then there is no release event (I do not know why).
+     * I cannot grab alt with GrabModeAsync because then it is not passed into any windows. I have tried XAllowEvents and XSendEvent.
+     * I cannot grab alt after a Alt-Tab press becase then a release event will not be triggered.
+     * I have to grab these asynchronously and enable KeyReleaseMask in ROOT. The issue is I now get and have to handle the event for EVERY key release, not just Alt.
+    */
+    XGrabKey(DISPLAY, XKeysymToKeycode(DISPLAY, XK_Tab), Mod1Mask | 0, ROOT, true, GrabModeAsync, GrabModeAsync);
 }
 
 void EshyWMSwitcher::show()
@@ -84,12 +92,11 @@ void EshyWMSwitcher::update_button_positions()
 
     XQueryPointer(DISPLAY, ROOT, &window_return, &window_return, &root_x, &root_y, &others, &others, &mask_return);
 
-    std::shared_ptr<s_monitor_info> monitor;
-    if(position_in_monitor(root_x, root_y, monitor))
-        set_position(CENTER_W(monitor, width), CENTER_H(monitor, height));
+    if(Output* output = output_at_position(root_x, root_y))
+        set_position(center_x(output, width), center_y(output, height));
     else
-        set_position(CENTER_W(EshyWM::monitors[0], width), CENTER_H(EshyWM::monitors[0], height));
-    
+        set_position(center_x(EshyWM::window_manager->outputs[0], width), center_y(EshyWM::window_manager->outputs[0], height));
+
     for(int i = 0; i < switcher_window_options.size(); i++)
     {
         switcher_window_options[i].button->set_position(get_button_x_position(i), EshyWMConfig::switcher_button_padding);
@@ -114,7 +121,7 @@ void EshyWMSwitcher::update_switcher_window_options()
 }
 
 
-void EshyWMSwitcher::add_window_option(std::shared_ptr<EshyWMWindow> associated_window, const Imlib_Image& icon)
+void EshyWMSwitcher::add_window_option(EshyWMWindow* associated_window, const Imlib_Image& icon)
 {
     imlib_context_set_image(icon);
     const int height = imlib_image_get_height();
@@ -132,7 +139,7 @@ void EshyWMSwitcher::add_window_option(std::shared_ptr<EshyWMWindow> associated_
     update_button_positions();
 }
 
-void EshyWMSwitcher::remove_window_option(std::shared_ptr<EshyWMWindow> associated_window)
+void EshyWMSwitcher::remove_window_option(EshyWMWindow* associated_window)
 {
     for(int i = 0; i < switcher_window_options.size(); i++)
     {
@@ -189,8 +196,7 @@ void EshyWMSwitcher::handle_option_chosen(const int i)
         if(switcher_window_options[i].window->get_window_state() == WS_MINIMIZED)
             switcher_window_options[i].window->minimize_window(false);
 
-        XRaiseWindow(DISPLAY, switcher_window_options[i].window->get_frame());
-        XSetInputFocus(DISPLAY, switcher_window_options[i].window->get_window(), RevertToPointerRoot, CurrentTime);
+        EshyWM::window_manager->focus_window(switcher_window_options[i].window, true);
         switcher_window_options[i].window->update_titlebar();
     }
 

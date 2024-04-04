@@ -32,21 +32,28 @@
 
 	#define SET_GLOBAL_SEVERITY(severity)		__set_global_log_severity(severity);
 	#define LOG(severity, message, ...)			__log_message(severity, message);
+	#define LOGV(message, ...)					LOG(LogSeverity::LS_Verbose, message, ...)
+	#define LOGI(message, ...)					LOG(LogSeverity::LS_Info, message, ...)
+	#define LOGW(message, ...)					LOG(LogSeverity::LS_Warning, message, ...)
+	#define LOGE(message, ...)					LOG(LogSeverity::LS_Error, message, ...)
+	#define LOGF(message, ...)					LOG(LogSeverity::LS_Fatal, message, ...)
 	#define LOG_EVENT_INFO(severity, event)		__log_event_info(severity, event);
 	#define LOG_VECTOR(severity, vector)		std::cout << "(" << vector.x << ", " << vector.y << ")" << std::endl;
 #else
 #ifndef __LOGGING_ENABLED
 	#define SET_GLOBAL_SEVERITY(severity) ;
 	#define LOG(severity, message)
+	#define LOGV(message, ...)
+	#define LOGI(message, ...)
+	#define LOGW(message, ...)
+	#define LOGE(message, ...)
+	#define LOGF(message, ...)
 	#define LOG_EVENT_INFO(severity, event)
 	#define LOG_VECTOR(severity, vector)
 #endif
 #endif
 
 typedef unsigned long Color;
-
-#define CENTER_W(monitor, w)       (int)(monitor->x + ((monitor->width - w) / 2.0f))
-#define CENTER_H(monitor, h)       (int)(monitor->y + ((monitor->height - EshyWMConfig::taskbar_height) - h) / 2.0f)
 
 struct Pos
 {
@@ -85,9 +92,47 @@ struct Rect
 	};
 };
 
-extern bool majority_monitor(Rect window_geometry, std::shared_ptr<struct s_monitor_info>& monitor_info);
-extern bool position_in_monitor(int x, int y, std::shared_ptr<struct s_monitor_info>& monitor_info);
+struct XPropertyReturn
+{
+	int status = 0;
+    Atom type;
+    int format = 0;
+    unsigned long n_items = 0;
+    unsigned long bytes_after = 0;
+    unsigned char* property_value = nullptr;
+};
+
+extern struct Atoms
+{
+	Atom supported;
+	Atom active_window;
+	Atom window_name;
+	Atom window_class;
+	Atom wm_protocols;
+	Atom wm_delete_window;
+	Atom window_type;
+	Atom window_type_dock;
+	Atom state;
+	Atom state_fullscreen;
+} atoms;
+
+extern XPropertyReturn get_xwindow_property(Display* display, Window window, Atom property);
+
+extern Pos get_cursor_position(Display* display, Window root);
+extern struct Output* output_at_position(int x, int y);
+extern struct Output* output_most_occupied(Rect geometry);
+
+extern const bool is_within_rect(int x, int y, const Rect& rect);
+
+//Returns x or y required to center a provided width and height in a output
+extern int center_x(struct Output* output, int width);
+extern int center_y(struct Output* output, int height);
 
 extern void set_window_transparency(Window window, float transparency);
 extern void increment_window_transparency(Window window, float transparency);
 extern void decrement_window_transparency(Window window, float transparency);
+
+extern void grab_key(int key, unsigned int main_modifier, Window window);
+extern void ungrab_key(int key, unsigned int main_modifier, Window window);
+extern void grab_button(int button, unsigned int main_modifier, Window window, unsigned int masks);
+extern void ungrab_button(int button, unsigned int main_modifier, Window window);

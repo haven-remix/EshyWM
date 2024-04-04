@@ -9,8 +9,10 @@
 
 #ifdef __LOGGING_ENABLED
 
-#define LOG_SEVERITY_CHECK(severity) if(severity < __global_log_severity) return;
+#define LOG_SEVERITY_CHECK(severity) 
 #define LOG_FATAL_CHECK(severity)	 if(severity == LogSeverity::LS_Fatal) abort();
+
+Atoms atoms;
 
 LogSeverity __global_log_severity;
 
@@ -21,54 +23,31 @@ void __set_global_log_severity(LogSeverity severity)
 
 void __log_message(LogSeverity severity, const char* message, ...)
 {
-    LOG_SEVERITY_CHECK(severity)
+	if(severity < __global_log_severity)
+		return;
 
-	FILE* file = fopen("/home/eshy/log.txt", "a");
+	if (FILE* file = fopen("/home/eshy/log.txt", "a"))
+	{
+		char _message[4096];
+		va_list ap;
+		va_start(ap, message);
+		vsprintf(_message, message, ap);
+		va_end(ap);
 
-	int i;
-	char* s;
-
-	char final[1000];
-	int index;
-
-	va_list args;
-	// va_start(args, message);
-	// while(*message)
-	// {
-	// 	switch(*message)
-	// 	{
-	// 	case 's':
-	// 	{
-	// 		s = va_arg(args, char*);
-	// 		strcat(final, s);
-	// 		break;
-	// 	}
-	// 	case 'i':
-	// 	{
-	// 		i = va_arg(args, int);
-	// 		char temp[12];
-	// 		sprintf(temp, "%i", i);
-	// 		strcat(final, temp);
-	// 		break;
-	// 	}
-	// 	default:
-	// 		strcat(final, (char*)(*message));
-	// 		break;
-	// 	};
-
-	// 	*message++;
-	// 	index++;
-	// }
-	// va_end(args);
-	fprintf(file, message, args);
-	fprintf(file, "\n");
-	fclose(file);
-	LOG_FATAL_CHECK(severity)
+		fprintf(file, _message);
+		fprintf(file, "\n");
+		fclose(file);
+	}
+	
+	if(severity == LogSeverity::LS_Fatal)
+		abort();
 }
 
 void __log_event_info(LogSeverity severity, XEvent event)
 {
-    LOG_SEVERITY_CHECK(severity)
+    if(severity < __global_log_severity)
+		return;
+
 	switch(event.type)
 	{
 	case DestroyNotify:
@@ -190,54 +169,95 @@ void __log_event_info(LogSeverity severity, XEvent event)
 			<< "state: " << event.xcrossing.state << "}"
 		<< std::endl;
 	};
-	LOG_FATAL_CHECK(severity)
+	
+	if(severity == LogSeverity::LS_Fatal)
+		abort();
 }
 #endif
 
-bool majority_monitor(Rect window_geometry, std::shared_ptr<s_monitor_info>& monitor_info)
+XPropertyReturn get_xwindow_property(Display* display, Window window, Atom property)
 {
-    for(std::shared_ptr<s_monitor_info> monitor : EshyWM::monitors)
-    {
-        const int window_center = window_geometry.x + (window_geometry.width / 2);
-        if(window_center > monitor->x && window_center < monitor->x + monitor->width)
-        {
-            monitor_info = monitor;
-            return true;
-        }
-    }
-
-    return false;
-}
-
-bool position_in_monitor(int x, int y, std::shared_ptr<s_monitor_info>& monitor_info)
-{
-	for(std::shared_ptr<s_monitor_info> monitor : EshyWM::monitors)
-    {
-        if(x >= monitor->x && x <= monitor->x + monitor->width && y >= monitor->y && y <= monitor->y + monitor->height)
-        {
-            monitor_info = monitor;
-            return true;
-        }
-    }
-
-    return false;
+	XPropertyReturn xproperty_return;
+    xproperty_return.status = XGetWindowProperty(DISPLAY, window, property, 0, 1024, False, AnyPropertyType, &xproperty_return.type, &xproperty_return.format, &xproperty_return.n_items, &xproperty_return.bytes_after, &xproperty_return.property_value);
+	return xproperty_return;
 }
 
 
-void set_window_transparency(Window window, float transparency)
+Pos get_cursor_position(Display* display, Window root)
 {
-	const std::string command = "transset-df " + std::to_string(transparency) + " --id " + std::to_string(window);
-	system(command.c_str());
+	Pos position;
+	Window window_return;
+    int others;
+    uint mask_return;
+    XQueryPointer(DISPLAY, ROOT, &window_return, &window_return, &position.x, &position.y, &others, &others, &mask_return);
+	return position;
 }
 
-void increment_window_transparency(Window window, float transparency)
+int center_x(struct Output* output, int width)
 {
-	const std::string command = "transset-df --id " + std::to_string(window) + " --inc " + std::to_string(transparency);
-	system(command.c_str());
+	return output->geometry.x + ((output->geometry.width - width) / 2.0f);
 }
 
-void decrement_window_transparency(Window window, float transparency)
+int center_y(struct Output* output, int height)
 {
-	const std::string command = "transset-df --id " + std::to_string(window) + " --dec " + std::to_string(transparency);
-	system(command.c_str());
+	return output->geometry.y + ((output->geometry.height - height) / 2.0f);
+}
+
+
+const bool is_within_rect(int x, int y, const Rect& rect)
+{
+	return x > rect.x && x < rect.x + rect.width && y > rect.y && y < rect.y + rect.height;
+}
+
+
+Output* output_at_position(int x, int y)
+{
+	auto it = std::ranges::find_if(EshyWM::window_manager->outputs, [x, y](auto output){
+		return x >= output->geometry.x && x <= output->geometry.x + output->geometry.width && y >= output->geometry.y && y <= output->geometry.y + output->geometry.height;
+	});
+
+	return it != EshyWM::window_manager->outputs.end() ? *it : nullptr;
+}
+
+Output* output_most_occupied(Rect geometry)
+{
+	auto it = std::ranges::find_if(EshyWM::window_manager->outputs, [&geometry](auto output){
+		const int window_center = geometry.x + (geometry.width / 2);
+		return window_center > output->geometry.x && window_center < output->geometry.x + output->geometry.width;
+	});
+
+	return it != EshyWM::window_manager->outputs.end() ? *it : nullptr;
+}
+
+
+void grab_key(int key, unsigned int main_modifier, Window window)
+{
+    XGrabKey(DISPLAY, key, main_modifier, window, false, GrabModeAsync, GrabModeAsync);
+    XGrabKey(DISPLAY, key, main_modifier | Mod2Mask, window, false, GrabModeAsync, GrabModeAsync);
+    XGrabKey(DISPLAY, key, main_modifier | LockMask, window, false, GrabModeAsync, GrabModeAsync);
+    XGrabKey(DISPLAY, key, main_modifier | Mod2Mask | LockMask, window, false, GrabModeAsync, GrabModeAsync);
+}
+
+void ungrab_key(int key, unsigned int main_modifier, Window window)
+{
+    XUngrabKey(DISPLAY, key, main_modifier, window);
+    XUngrabKey(DISPLAY, key, main_modifier | Mod2Mask, window);
+    XUngrabKey(DISPLAY, key, main_modifier | LockMask, window);
+    XUngrabKey(DISPLAY, key, main_modifier | Mod2Mask | LockMask, window);
+}
+
+void grab_button(int button, unsigned int main_modifier, Window window, unsigned int masks)
+{
+    XGrabButton(DISPLAY, button, main_modifier, window, false, masks, GrabModeAsync, GrabModeAsync, None, None);
+    XGrabButton(DISPLAY, button, main_modifier | Mod2Mask, window, false, masks, GrabModeAsync, GrabModeAsync, None, None);
+    XGrabButton(DISPLAY, button, main_modifier | LockMask, window, false, masks, GrabModeAsync, GrabModeAsync, None, None);
+    XGrabButton(DISPLAY, button, main_modifier | Mod2Mask | LockMask, window, false, masks, GrabModeAsync, GrabModeAsync, None, None);
+}
+
+void ungrab_button(int button, unsigned int main_modifier, Window window)
+{
+    XUngrabButton(DISPLAY, button, main_modifier, window);
+    XUngrabButton(DISPLAY, button, main_modifier | Mod2Mask, window);
+    XUngrabButton(DISPLAY, button, main_modifier | LockMask, window);
+    XUngrabButton(DISPLAY, button, main_modifier | Mod2Mask | LockMask, window);
 }

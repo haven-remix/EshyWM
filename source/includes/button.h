@@ -26,8 +26,8 @@ enum EButtonState : uint8_t
 
 struct button_clicked_data
 {
-    std::shared_ptr<EshyWMWindow> associated_window;
-    void (*callback_function)(std::shared_ptr<EshyWMWindow> window, void*);
+    EshyWMWindow* associated_window;
+    void (*callback_function)(EshyWMWindow* window, void*);
 };
 
 class Button

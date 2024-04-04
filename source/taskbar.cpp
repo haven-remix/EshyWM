@@ -60,7 +60,7 @@ void EshyWMTaskbar::show_taskbar(bool b_show)
 }
 
 
-void EshyWMTaskbar::add_button(std::shared_ptr<EshyWMWindow> associated_window, const Imlib_Image& icon)
+void EshyWMTaskbar::add_button(EshyWMWindow* associated_window, const Imlib_Image& icon)
 {
     const std::shared_ptr<ImageButton> button = std::make_shared<ImageButton>(
         menu_window, 
@@ -76,7 +76,7 @@ void EshyWMTaskbar::add_button(std::shared_ptr<EshyWMWindow> associated_window, 
     display_system_info();
 }
 
-void EshyWMTaskbar::remove_button(std::shared_ptr<EshyWMWindow> associated_window)
+void EshyWMTaskbar::remove_button(EshyWMWindow* associated_window)
 {
     for(int i = 0; i < taskbar_buttons.size(); i++)
     {
@@ -89,7 +89,7 @@ void EshyWMTaskbar::remove_button(std::shared_ptr<EshyWMWindow> associated_windo
     }
 }
 
-void EshyWMTaskbar::on_taskbar_button_clicked(std::shared_ptr<EshyWMWindow> window)
+void EshyWMTaskbar::on_taskbar_button_clicked(EshyWMWindow* window)
 {
     Window returned_root;
     Window returned_parent;

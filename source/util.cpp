@@ -12,7 +12,6 @@
 #define LOG_SEVERITY_CHECK(severity) 
 #define LOG_FATAL_CHECK(severity)	 if(severity == LogSeverity::LS_Fatal) abort();
 
-Atoms atoms;
 
 LogSeverity __global_log_severity;
 
@@ -174,13 +173,6 @@ void __log_event_info(LogSeverity severity, XEvent event)
 		abort();
 }
 #endif
-
-XPropertyReturn get_xwindow_property(Display* display, Window window, Atom property)
-{
-	XPropertyReturn xproperty_return;
-    xproperty_return.status = XGetWindowProperty(DISPLAY, window, property, 0, 1024, False, AnyPropertyType, &xproperty_return.type, &xproperty_return.format, &xproperty_return.n_items, &xproperty_return.bytes_after, &xproperty_return.property_value);
-	return xproperty_return;
-}
 
 
 Pos get_cursor_position(Display* display, Window root)

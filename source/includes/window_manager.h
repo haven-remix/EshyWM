@@ -64,7 +64,6 @@ private:
     bool b_manipulating_with_keys = false;
     bool b_manipulating_with_titlebar = false;
 
-    std::vector<Window> keep_raised;
     std::shared_ptr<class Button> currently_hovered_button;
     Rect manipulating_window_geometry;
 

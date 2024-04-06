@@ -28,10 +28,10 @@ class EshyWMWindow
 {
 public:
 
-    EshyWMWindow(Window _window, struct Workspace* _workspace, bool _b_force_no_titlebar);
+    EshyWMWindow(Window _window, struct Workspace* _workspace, const Rect& geometry);
     ~EshyWMWindow();
 
-    void frame_window(XWindowAttributes attr);
+    void frame_window();
     void unframe_window();
 
     void toggle_minimize() {minimize_window(get_window_state() != WS_MINIMIZED);}
@@ -64,7 +64,7 @@ public:
     const Imlib_Image get_window_icon() const {return window_icon;}
     const EWindowState get_window_state() const {return window_state;}
 
-    std::shared_ptr<class WindowButton> get_close_button() const {return close_button;}
+    class WindowButton* get_close_button() const {return close_button;}
 
     Workspace* parent_workspace;
 
@@ -80,12 +80,11 @@ private:
 
     EWindowState window_state;
     bool b_show_titlebar;
-    bool b_force_no_titlebar;
 
     Imlib_Image window_icon;
 
     cairo_surface_t* cairo_titlebar_surface;
     cairo_t* cairo_context;
 
-    std::shared_ptr<class WindowButton> close_button;
+    class WindowButton* close_button;
 };

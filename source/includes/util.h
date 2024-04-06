@@ -102,22 +102,6 @@ struct XPropertyReturn
     unsigned char* property_value = nullptr;
 };
 
-extern struct Atoms
-{
-	Atom supported;
-	Atom active_window;
-	Atom window_name;
-	Atom window_class;
-	Atom wm_protocols;
-	Atom wm_delete_window;
-	Atom window_type;
-	Atom window_type_dock;
-	Atom state;
-	Atom state_fullscreen;
-} atoms;
-
-extern XPropertyReturn get_xwindow_property(Display* display, Window window, Atom property);
-
 extern Pos get_cursor_position(Display* display, Window root);
 extern struct Output* output_at_position(int x, int y);
 extern struct Output* output_most_occupied(Rect geometry);

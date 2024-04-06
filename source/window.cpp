@@ -10,6 +10,7 @@
 #include "taskbar.h"
 #include "switcher.h"
 #include "util.h"
+#include "X11.h"
 
 #include <algorithm>
 #include <cstring>
@@ -100,14 +101,14 @@ static bool retrieve_window_icon(Window window, Imlib_Image* icon)
     return false;
 }
 
-EshyWMWindow::EshyWMWindow(Window _window, Workspace* _workspace, bool _b_force_no_titlebar)
+EshyWMWindow::EshyWMWindow(Window _window, Workspace* _workspace, const Rect& geometry)
     : window(_window)
     , parent_workspace(_workspace)
-    , b_force_no_titlebar(_b_force_no_titlebar)
-    , b_show_titlebar(!_b_force_no_titlebar)
+    , b_show_titlebar(true)
     , window_icon(nullptr)
-    , frame_geometry({0, 0, 100, 100})
-    , pre_state_change_geometry({0, 0, 100, 100})
+    , frame_geometry(geometry)
+    , pre_state_change_geometry(geometry)
+    , window_state(WS_NONE)
 {
     if(!retrieve_window_icon(window, &window_icon))
         window_icon = imlib_load_image(EshyWMConfig::default_application_image_path.c_str());
@@ -118,68 +119,39 @@ EshyWMWindow::~EshyWMWindow()
     imlib_context_set_image(window_icon);
     imlib_free_image();
 
-    cairo_surface_destroy(cairo_titlebar_surface);
-    cairo_destroy(cairo_context);
+    delete close_button;
 }
 
 
-void EshyWMWindow::frame_window(XWindowAttributes attr)
+void EshyWMWindow::frame_window()
 {
-    frame_geometry = {attr.x, attr.y, (uint)attr.width, (uint)(attr.height + EshyWMConfig::titlebar_height)};
-    pre_state_change_geometry = frame_geometry;
+    const Pos offset = {0, (int)EshyWMConfig::titlebar_height};
+    const Rect titlebar_geometry = {0, 0, (uint)frame_geometry.width, (uint)EshyWMConfig::titlebar_height};
+    frame = X11::frame_window(window, frame_geometry, offset, SubstructureRedirectMask | EnterWindowMask, EshyWMConfig::window_frame_border_width);
+    titlebar = X11::create_window(titlebar_geometry, VisibilityChangeMask, 0);
+    X11::map_window(titlebar);
 
-    frame = XCreateSimpleWindow(DISPLAY, ROOT, frame_geometry.x, frame_geometry.y, frame_geometry.width, frame_geometry.height, EshyWMConfig::window_frame_border_width, EshyWMConfig::window_frame_border_color, EshyWMConfig::window_background_color);
-    //Resize because in case we use the * 0.9 version of height, then the bottom is cut off
-    XResizeWindow(DISPLAY, window, attr.width, attr.height);
-    XReparentWindow(DISPLAY, window, frame, 0, (!b_force_no_titlebar ? EshyWMConfig::titlebar_height : 0));
-    XSelectInput(DISPLAY, frame, EnterWindowMask);
-    XMapWindow(DISPLAY, frame);
-
-    XSelectInput(DISPLAY, window, PointerMotionMask | StructureNotifyMask | PropertyChangeMask);
-
-    set_window_state(WS_NORMAL);
-
-    //Set frame class to match the window
-    const XPropertyReturn class_property = get_xwindow_property(DISPLAY, window, atoms.window_class);
-    if(class_property.status == Success && class_property.type != None && class_property.format == 8)
-        XChangeProperty(DISPLAY, frame, atoms.window_class, XA_STRING, 8, PropModeReplace, (unsigned char*)class_property.property_value, strlen((const char*)class_property.property_value));
-
-    XFree(class_property.property_value);
-    XFlush(DISPLAY);
-
-    if(!b_force_no_titlebar)
-    {
-        titlebar = XCreateSimpleWindow(DISPLAY, frame, 0, 0, attr.width, EshyWMConfig::titlebar_height, 0, EshyWMConfig::window_frame_border_color, EshyWMConfig::window_background_color);
-        XSelectInput(DISPLAY, titlebar, VisibilityChangeMask);
-        XMapWindow(DISPLAY, titlebar);
-
-        cairo_titlebar_surface = cairo_xlib_surface_create(DISPLAY, titlebar, DefaultVisual(DISPLAY, 0), attr.width, EshyWMConfig::titlebar_height);
-        cairo_context = cairo_create(cairo_titlebar_surface);
+    cairo_titlebar_surface = cairo_xlib_surface_create(DISPLAY, titlebar, DefaultVisual(DISPLAY, 0), frame_geometry.width, EshyWMConfig::titlebar_height);
+    cairo_context = cairo_create(cairo_titlebar_surface);
         
-        const Rect initial_size = {0, 0, EshyWMConfig::titlebar_button_size, EshyWMConfig::titlebar_button_size};
-        const button_color_data close_button_color = {EshyWMConfig::titlebar_button_normal_color, EshyWMConfig::close_button_color, EshyWMConfig::titlebar_button_pressed_color};
-        close_button = std::make_shared<ImageButton>(titlebar, initial_size, close_button_color, EshyWMConfig::close_button_image_path.c_str());
-        close_button->click_callback = std::bind(std::mem_fn(&EshyWMWindow::close_window), this);
-    }
+    const Rect initial_size = {0, 0, EshyWMConfig::titlebar_button_size, EshyWMConfig::titlebar_button_size};
+    const button_color_data close_button_color = {EshyWMConfig::titlebar_button_normal_color, EshyWMConfig::close_button_color, EshyWMConfig::titlebar_button_pressed_color};
+    close_button = new ImageButton(titlebar, initial_size, close_button_color, EshyWMConfig::close_button_image_path.c_str());
+    close_button->click_callback = std::bind(std::mem_fn(&EshyWMWindow::close_window), this);
 
+    XFlush(DISPLAY);
+    set_window_state(WS_NORMAL);
     update_titlebar();
 }
 
 void EshyWMWindow::unframe_window()
 {
-    if(frame)
-    {
-        XUnmapWindow(DISPLAY, frame);
-        XReparentWindow(DISPLAY, window, ROOT, 0, 0);
-        XRemoveFromSaveSet(DISPLAY, window);
-        XDestroyWindow(DISPLAY, frame);
-    }
+    X11::reparent_window(window, ROOT, {0});
+    X11::destroy_window(frame);
+    X11::destroy_window(titlebar);
 
-    if(titlebar)
-    {        
-        XUnmapWindow(DISPLAY, titlebar);
-        XDestroyWindow(DISPLAY, titlebar);
-    }
+    cairo_surface_destroy(cairo_titlebar_surface);
+    cairo_destroy(cairo_context);
 }
 
 
@@ -297,16 +269,16 @@ void EshyWMWindow::close_window()
     //This is not a typical status return. This one is zero when it fails.
     const int status = XGetWMProtocols(DISPLAY, window, &supported_protocols, &num_supported_protocols);
 
-    const bool b_protocol_exists = std::ranges::contains(std::span(supported_protocols, num_supported_protocols), atoms.wm_delete_window);
+    const bool b_protocol_exists = std::ranges::contains(std::span(supported_protocols, num_supported_protocols), X11::atoms.wm_delete_window);
     if (status && b_protocol_exists)
     {
         XEvent message;
         memset(&message, 0, sizeof(message));
         message.xclient.type = ClientMessage;
-        message.xclient.message_type = atoms.wm_protocols;
+        message.xclient.message_type = X11::atoms.wm_protocols;
         message.xclient.window = window;
         message.xclient.format = 32;
-        message.xclient.data.l[0] = atoms.wm_delete_window;
+        message.xclient.data.l[0] = X11::atoms.wm_delete_window;
         XSendEvent(DISPLAY, window, false, 0 , &message);
     }
     else
@@ -314,7 +286,7 @@ void EshyWMWindow::close_window()
         XKillClient(DISPLAY, window);
     }
 
-    const XPropertyReturn property = get_xwindow_property(DISPLAY, window, atoms.window_class);
+    const X11::WindowProperty property = X11::get_window_property(window, X11::atoms.window_class);
     if(property.status == Success)
     {
         EshyWMConfig::add_window_close_state((const char*)property.property_value, get_window_state() == EWindowState::WS_MAXIMIZED ? "maximized" : "normal");
@@ -525,7 +497,7 @@ void EshyWMWindow::resize_window_absolute(uint new_size_x, uint new_size_y, bool
 
 void EshyWMWindow::set_show_titlebar(bool b_new_show_titlebar)
 {
-    if(b_force_no_titlebar || b_show_titlebar == b_new_show_titlebar)
+    if(b_show_titlebar == b_new_show_titlebar)
         return;
     
     b_show_titlebar = b_new_show_titlebar;

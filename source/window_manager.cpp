@@ -24,6 +24,7 @@ void WindowManager::initialize()
 {
     display = XOpenDisplay(nullptr);
     assert(display);
+    X11::set_display(display);
 
     XSetErrorHandler([](Display* display, XErrorEvent* event)
     {
@@ -32,29 +33,29 @@ void WindowManager::initialize()
         return 0;
     });
 
-    atoms.supported = XInternAtom(DISPLAY, "_NET_SUPPORTED", False);
-    atoms.active_window = XInternAtom(DISPLAY, "_NET_ACTIVE_WINDOW", False);
-    atoms.window_name = XInternAtom(DISPLAY, "WM_NAME", False);
-    atoms.window_class = XInternAtom(DISPLAY, "WM_CLASS", False);
-    atoms.wm_protocols = XInternAtom(DISPLAY, "WM_PROTOCOLS", False);
-    atoms.wm_delete_window = XInternAtom(DISPLAY, "WM_DELETE_WINDOW", False);
-    atoms.window_type = XInternAtom(DISPLAY, "_NET_WM_WINDOW_TYPE", False);
-    atoms.window_type_dock = XInternAtom(DISPLAY, "_NET_WM_WINDOW_TYPE_DOCK", False);
-    atoms.state = XInternAtom(DISPLAY, "_NET_WM_STATE", False);
-    atoms.state_fullscreen = XInternAtom(DISPLAY, "_NET_WM_STATE_FULLSCREEN", False);
+    X11::atoms.supported = XInternAtom(DISPLAY, "_NET_SUPPORTED", False);
+    X11::atoms.active_window = XInternAtom(DISPLAY, "_NET_ACTIVE_WINDOW", False);
+    X11::atoms.window_name = XInternAtom(DISPLAY, "WM_NAME", False);
+    X11::atoms.window_class = XInternAtom(DISPLAY, "WM_CLASS", False);
+    X11::atoms.wm_protocols = XInternAtom(DISPLAY, "WM_PROTOCOLS", False);
+    X11::atoms.wm_delete_window = XInternAtom(DISPLAY, "WM_DELETE_WINDOW", False);
+    X11::atoms.window_type = XInternAtom(DISPLAY, "_NET_WM_WINDOW_TYPE", False);
+    X11::atoms.window_type_dock = XInternAtom(DISPLAY, "_NET_WM_WINDOW_TYPE_DOCK", False);
+    X11::atoms.state = XInternAtom(DISPLAY, "_NET_WM_STATE", False);
+    X11::atoms.state_fullscreen = XInternAtom(DISPLAY, "_NET_WM_STATE_FULLSCREEN", False);
 
-    Atom supported_atoms[2] = {atoms.active_window, atoms.window_name};
-    XChangeProperty(DISPLAY, ROOT, atoms.supported, XA_ATOM, 32, PropModeReplace, (unsigned char*)supported_atoms, 2);
+    const int num_supposed_atoms = 2;
+    Atom supported_atoms[num_supposed_atoms] = {X11::atoms.active_window, X11::atoms.window_name};
+    XChangeProperty(DISPLAY, ROOT, X11::atoms.supported, XA_ATOM, 32, PropModeReplace, (unsigned char*)supported_atoms, num_supposed_atoms);
 
     XSelectInput(DISPLAY, ROOT, PointerMotionMask | SubstructureRedirectMask | StructureNotifyMask | SubstructureNotifyMask);
     XSync(DISPLAY, false);
 
     grab_keys();
+    scan_outputs();
 
     const int XC_left_ptr_code = 68;
     XDefineCursor(DISPLAY, ROOT, XCreateFontCursor(DISPLAY, XC_left_ptr_code));
-
-    scan_outputs();
 
     //Create a deafult workspace for each output
     for (int i = 0; i < outputs.size(); ++i)
@@ -141,45 +142,25 @@ void WindowManager::handle_preexisting_windows()
     {
         const int MAX_ERROR_TEXT_LEGTH = 1024;
         char error_text[MAX_ERROR_TEXT_LEGTH];
-        XGetErrorText(display, event->error_code, error_text, sizeof(error_text));
+        XGetErrorText(display, event->error_code, error_text, MAX_ERROR_TEXT_LEGTH);
+        LOGE(error_text);
         return 0;
     });
 
     XGrabServer(DISPLAY);
 
     const X11::WindowTree top_level_windows = X11::query_window_tree(ROOT);
-    
-    std::vector<Window> should_not_be_framed = { SWITCHER->get_menu_window() };
-    for (Output* output : outputs)
-    {
-        if (output->top_dock)
-            should_not_be_framed.push_back(output->top_dock->window);
-        if (output->bottom_dock)
-            should_not_be_framed.push_back(output->bottom_dock->window);
-    }
-
+    assert(top_level_windows.status);
     for(Window window : top_level_windows.windows)
     {
-        if (std::ranges::contains(should_not_be_framed, window))
+        if (window == SWITCHER->get_menu_window())
             continue;
 
         register_window(window, true);
         XMapWindow(DISPLAY, window);
     }
 
-    for (unsigned int i = 0; i < num_top_level_windows; ++i)
-    {
-        if (std::ranges::contains(should_not_be_framed, top_level_windows[i]))
-            continue;
-
-        register_window(top_level_windows[i], true);
-        XMapWindow(DISPLAY, top_level_windows[i]);
-    }
-
-    XFree(top_level_windows);
     XUngrabServer(DISPLAY);
-
-    keep_raised = should_not_be_framed;
 }
 
 void WindowManager::grab_keys()
@@ -270,16 +251,16 @@ void WindowManager::scan_outputs()
 EshyWMWindow* WindowManager::register_window(Window window, bool b_was_created_before_window_manager)
 {
     //Do not frame already framed windows
-    if (std::ranges::count_if(window_list, [window](auto w) {return w->get_window() == window;}) > 0)
+    if(contains_xwindow(window))
         return nullptr;
 
-    //Retrieve attributes of window to frame
-    XWindowAttributes x_window_attributes = { 0 };
-    XGetWindowAttributes(DISPLAY, window, &x_window_attributes);
+    X11::WindowAttributes window_attributes = X11::get_window_attributes(window);
 
     //If window was created before window manager started, we should frame it only if it is visible and does not set override_redirect
-    if (b_was_created_before_window_manager && (x_window_attributes.override_redirect || x_window_attributes.map_state != IsViewable))
+    if (b_was_created_before_window_manager && (window_attributes.override_redirect || window_attributes.map_state != IsViewable))
+    {
         return nullptr;
+    }
 
     //Add so we can restore if we crash
     XAddToSaveSet(DISPLAY, window);
@@ -290,25 +271,27 @@ EshyWMWindow* WindowManager::register_window(Window window, bool b_was_created_b
     Output* output = output_at_position(cursor_position.x, cursor_position.y);
     assert(output && output->active_workspace);
 
-    x_window_attributes.width = std::min((int)(output->geometry.width * 0.9f), x_window_attributes.width);
-    x_window_attributes.height = std::min((int)(output->geometry.height * 0.9f), x_window_attributes.height);
+    window_attributes.width = std::min((uint)(output->geometry.width * 0.9f), window_attributes.width);
+    window_attributes.height = std::min((uint)(output->geometry.height * 0.9f), window_attributes.height);
     
     //Set the x, y positions to be the center location
-    x_window_attributes.x = std::clamp(center_x(output, x_window_attributes.width), output->geometry.x, center_x(output, 0));
-    x_window_attributes.y = std::clamp(center_y(output, x_window_attributes.height), output->geometry.y, center_y(output, 0));
+    window_attributes.x = std::clamp(center_x(output, window_attributes.width), output->geometry.x, center_x(output, 0));
+    window_attributes.y = std::clamp(center_y(output, window_attributes.height), output->geometry.y, center_y(output, 0));
+
+    //Resize because in case we use the * 0.9 version of height, then the bottom is cut off
+    X11::resize_window(window, window_attributes.geometry);
+    X11::set_input_masks(window, PointerMotionMask | StructureNotifyMask | PropertyChangeMask);
 
     //If window was previously maximized when it was closed, then maximize again. Otherwise center and clamp size
-    const Atom ATOM_CLASS = XInternAtom(DISPLAY, "WM_CLASS", False);
-    const XPropertyReturn class_property = get_xwindow_property(DISPLAY, window, ATOM_CLASS);
-
+    const X11::WindowProperty class_property = X11::get_window_property(window, X11::atoms.window_class);
     const std::string window_name = std::string((const char*)class_property.property_value);
-    const bool b_begin_maximized = EshyWMConfig::window_close_data.find(window_name) != EshyWMConfig::window_close_data.end() && EshyWMConfig::window_close_data[window_name] == "maximized";
+    const bool b_begin_maximized = EshyWMConfig::window_close_data.contains(window_name) && EshyWMConfig::window_close_data[window_name] == "maximized";;
 
     //Create window
-    EshyWMWindow* new_window = new EshyWMWindow(window, output->active_workspace, false);
-    new_window->frame_window(x_window_attributes);
+    EshyWMWindow* new_window = new EshyWMWindow(window, output->active_workspace, window_attributes.geometry);
+    new_window->frame_window();
     new_window->maximize_window(b_begin_maximized);
-    window_list.push_back(new_window);
+    window_list.push_back(new_window); 
 
     EshyWM::window_created_notify(new_window);
     return new_window;
@@ -317,29 +300,32 @@ EshyWMWindow* WindowManager::register_window(Window window, bool b_was_created_b
 Dock* WindowManager::register_dock(Window window, bool b_was_created_before_window_manager)
 {
     //Do not reregister docks
-    auto check_registration = [window](auto output) {
-        return (output->top_dock ? output->top_dock->window == window : false) || (output->bottom_dock ? output->bottom_dock->window == window : false);
-    };
-    if (std::ranges::count_if(outputs, check_registration) > 1)
+    for(Output* output : outputs)
+    {
+        if (!(output->top_dock && output->top_dock->window == window) && !(output->bottom_dock && output->bottom_dock->window == window))
+            continue;
+        
         return nullptr;
+    }
 
     //Retrieve attributes of dock window
-    XWindowAttributes x_window_attributes = { 0 };
-    XGetWindowAttributes(DISPLAY, window, &x_window_attributes);
+    X11::WindowAttributes window_attributes = X11::get_window_attributes(window);
 
     //If dock was created before window manager started, we should register it only if it is visible and does not set override_redirect
-    if (b_was_created_before_window_manager && (x_window_attributes.override_redirect || x_window_attributes.map_state != IsViewable))
+    if (b_was_created_before_window_manager && (window_attributes.override_redirect || window_attributes.map_state != IsViewable))
+    {
         return nullptr;
+    }
 
     //Add so we can restore if we crash
     XAddToSaveSet(DISPLAY, window);
 
-    const Rect geometry = { x_window_attributes.x, x_window_attributes.y, (uint)x_window_attributes.width, (uint)x_window_attributes.height };
+    const Rect geometry = { window_attributes.x, window_attributes.y, (uint)window_attributes.width, (uint)window_attributes.height };
     Output* output = output_most_occupied(geometry);
     assert(output);
 
     //Create dock
-    Dock* new_dock = new Dock{ window, output, geometry, x_window_attributes.y == 0 ? DL_Top : DL_Bottom };
+    Dock* new_dock = new Dock{ window, output, geometry, window_attributes.y == 0 ? DL_Top : DL_Bottom };
     output->add_dock(new_dock, new_dock->dock_location);
     return new_dock;
 }
@@ -354,7 +340,7 @@ void WindowManager::focus_window(EshyWMWindow* window, bool b_raise)
     }
 
     Window win = window->get_window();
-    XChangeProperty(DISPLAY, ROOT, atoms.active_window, XA_WINDOW, 32, PropModeReplace, (unsigned char*)&win, 1);
+    XChangeProperty(DISPLAY, ROOT, X11::atoms.active_window, XA_WINDOW, 32, PropModeReplace, (unsigned char*)&win, 1);
     XSetInputFocus(DISPLAY, window->get_window(), RevertToNone, CurrentTime);
 
     focused_window = window;
@@ -437,7 +423,9 @@ void WindowManager::OnDestroyNotify(const XDestroyWindowEvent& event)
 
         if(focused_window == window)
         {
-            focus_window(window_list.size() > 0 ? window_list[0] : nullptr, window_list.size() > 0  && focused_window == window_list[0] ? true : false);
+            EshyWMWindow* window = window_list.size() > 0 ? window_list[0] : nullptr;
+            const bool b_raise_window = window_list.size() > 0 && focused_window == window_list[0];
+            focus_window(window, b_raise_window);
         }
 
         //At this point the window and all pointers associated with it have been dealt with
@@ -471,25 +459,15 @@ void WindowManager::OnMapNotify(const XMapEvent& event)
 
 void WindowManager::OnUnmapNotify(const XUnmapEvent& event)
 {
-    /* if(event.event == ROOT)
-        return; */
-
-    //@TODO:
-    //I do not think this should be necessary because we should just use the minimize call
-    //Commented for now, if I notice bugs due to this I will fix them later by calling minimize
-    //Not deleting in case I actually need this at some point
-    /* if (EshyWMWindow* window = contains_xwindow(event.window))
-    {
-        window->unframe_window();
-    } */
+    
 }
 
 void WindowManager::OnMapRequest(const XMapRequestEvent& event)
 {
     //Check if this is a dock
-    const XPropertyReturn window_type_property = get_xwindow_property(DISPLAY, event.window, atoms.window_type);
-    const bool b_is_dock = window_type_property.status == Success && window_type_property.format == 32 && window_type_property.n_items > 0 &&
-        std::ranges::contains(std::span((Atom*)window_type_property.property_value, window_type_property.n_items), atoms.window_type_dock);
+    const X11::WindowProperty type_property = X11::get_window_property(event.window, X11::atoms.window_type);
+    const bool b_is_dock = type_property.status == Success && type_property.format == 32 && type_property.n_items > 0 &&
+        std::ranges::contains(std::span((Atom*)type_property.property_value, type_property.n_items), X11::atoms.window_type_dock);
 
     if(b_is_dock)
     {
@@ -509,11 +487,11 @@ void WindowManager::OnPropertyNotify(const XPropertyEvent& event)
     if (EshyWMWindow* window = contains_xwindow(event.window))
         window->update_titlebar();
 
-    if (event.atom == atoms.window_type)
+    if (event.atom == X11::atoms.window_type)
     {
-        const XPropertyReturn window_type_property = get_xwindow_property(DISPLAY, event.window, atoms.window_type);
-        const bool b_is_dock = window_type_property.status == Success && window_type_property.format == 32 && window_type_property.n_items > 0 &&
-            std::ranges::contains(std::span((Atom*)window_type_property.property_value, window_type_property.n_items), atoms.window_type_dock);
+        const X11::WindowProperty type_property = X11::get_window_property(event.window, X11::atoms.window_type);
+        const bool b_is_dock = type_property.status == Success && type_property.format == 32 && type_property.n_items > 0 &&
+            std::ranges::contains(std::span((Atom*)type_property.property_value, type_property.n_items), X11::atoms.window_type_dock);
 
         if(!b_is_dock)
             return;
@@ -559,12 +537,6 @@ void WindowManager::OnConfigureRequest(const XConfigureRequestEvent& event)
 
 void WindowManager::OnVisibilityNotify(const XVisibilityEvent& event)
 {
-    if (std::ranges::contains(keep_raised, event.window))
-    {
-        XRaiseWindow(DISPLAY, event.window);
-        return;
-    }
-
     for(EshyWMWindow* window : window_list)
     {
         if(event.window != window->get_titlebar())
@@ -580,10 +552,12 @@ void WindowManager::OnButtonPress(const XButtonEvent& event)
     //Pass the click event through
     XAllowEvents(DISPLAY, ReplayPointer, event.time);
 
+    if(window_list.size() <= 0)
+        return;
+
     if(focused_window && is_within_rect(event.x_root, event.y_root, focused_window->get_frame_geometry()))
     {
-        //LOGE("SKIPPING");
-        goto skip_new_focus;
+        goto handle_click;
     }
 
     for(EshyWMWindow* window : window_list)
@@ -595,16 +569,19 @@ void WindowManager::OnButtonPress(const XButtonEvent& event)
         break;
     }
 
-    if(!focused_window)
+    if(!focused_window || (focused_window && focused_window != window_list[0]))
     {
-        //LOGE("REMOVING FOCUS");
         focus_window(nullptr, false);
         return;
     }
 
-skip_new_focus:
+handle_click:
 
-    //LOGE("Found focused");
+    if(focused_window && focused_window != window_list[0])
+    {
+        focus_window(focused_window, true);
+    }
+
     click_cursor_position = { event.x_root, event.y_root };
     manipulating_window_geometry = focused_window->get_frame_geometry();
     
@@ -837,7 +814,7 @@ void WindowManager::OnClientMessage(const XClientMessageEvent& event)
 {
     //@TEMP: hashmap
     EshyWMWindow* window = contains_xwindow(event.window);
-    if (window && event.message_type == atoms.state && (event.data.l[1] == atoms.state_fullscreen || event.data.l[2] == atoms.state_fullscreen))
+    if (window && event.message_type == X11::atoms.state && (event.data.l[1] == X11::atoms.state_fullscreen || event.data.l[2] == X11::atoms.state_fullscreen))
         window->fullscreen_window(event.data.l[0]);
 }
 

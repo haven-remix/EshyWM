@@ -7,9 +7,9 @@
 
 #define SWITCHER              EshyWM::switcher
 
-#define DISPLAY               WindowManager::display
-#define ROOT                  DefaultRootWindow(WindowManager::display)
-#define DEFAULT_VISUAL(i)     DefaultVisual(WindowManager::display, i)
+//#define DISPLAY               WindowManager::display
+//#define ROOT                  DefaultRootWindow(WindowManager::display)
+//#define DEFAULT_VISUAL(i)     DefaultVisual(WindowManager::display, i)
 
 class EshyWMSwitcher;
 

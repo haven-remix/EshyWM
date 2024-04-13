@@ -3,6 +3,7 @@
 #include "eshywm.h"
 #include "window_manager.h"
 #include "config.h"
+#include "X11.h"
 
 #include <Imlib2.h>
 #include <X11/Xutil.h>
@@ -44,22 +45,23 @@ WindowButton::WindowButton(Window parent_window, const Rect& _button_geometry, c
     button_geometry = _button_geometry;
     button_color = _background_color;
 
-    button_window = XCreateSimpleWindow(DISPLAY, parent_window, 0, 0, button_geometry.width, button_geometry.height, 0, 0, _background_color.normal);
-    XSelectInput(DISPLAY, button_window, StructureNotifyMask | VisibilityChangeMask | EnterWindowMask | LeaveWindowMask | KeyPressMask | KeyReleaseMask);
-    XMapWindow(DISPLAY, button_window);
-    XSync(DISPLAY, false);
+    button_window = X11::create_window(button_geometry, StructureNotifyMask | VisibilityChangeMask | EnterWindowMask | LeaveWindowMask | KeyPressMask | KeyReleaseMask, 0);
+    X11::reparent_window(button_window, parent_window, {});
+    //button_window = XCreateSimpleWindow(DISPLAY, parent_window, 0, 0, button_geometry.width, button_geometry.height, 0, 0, _background_color.normal);
+    X11::map_window(button_window);
+    XSync(X11::get_display(), false);
 }
 
 WindowButton::~WindowButton()
 {
-    XUnmapWindow(DISPLAY, button_window);
-    XDestroyWindow(DISPLAY, button_window);
+    X11::unmap_window(button_window);
+    X11::destroy_window(button_window);
 }
 
 void WindowButton::set_border_color(Color border_color)
 {
-    XSetWindowBorder(DISPLAY, button_window, border_color);
-    XClearWindow(DISPLAY, button_window);
+    X11::set_border_color(button_window, border_color);
+    XClearWindow(X11::get_display(), button_window);
     draw();
 }
 
@@ -67,20 +69,24 @@ void WindowButton::set_position(int x, int y)
 {
     button_geometry.x = x;
     button_geometry.y = y;
-    XMoveWindow(DISPLAY, button_window, x, y);
+    X11::move_window(button_window, Pos{x, y});
 }
 
 void WindowButton::set_size(uint width, uint height)
 {
     button_geometry.width = width;
     button_geometry.height = height;
-    XResizeWindow(DISPLAY, button_window, width, height);
+    X11::resize_window(button_window, Size{width, height});
 }
 
 void WindowButton::on_update_state()
 {
-    XSetWindowBackground(DISPLAY, button_window, (button_state == EButtonState::S_Hovered) ? button_color.hovered : (button_state == EButtonState::S_Pressed) ? button_color.pressed : button_color.normal);
-    XClearWindow(DISPLAY, button_window);
+    const Color background_color = button_state == EButtonState::S_Hovered ? button_color.hovered 
+        : button_state == EButtonState::S_Pressed ? button_color.pressed 
+        : button_color.normal;
+    
+    X11::set_background_color(button_window, background_color);
+    XClearWindow(X11::get_display(), button_window);
     draw();
 }
 

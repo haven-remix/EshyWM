@@ -3,6 +3,7 @@
 #include "eshywm.h"
 #include "button.h"
 #include "window.h"
+#include "X11.h"
 
 #include <X11/Xutil.h>
 #include <X11/Xatom.h>
@@ -28,11 +29,10 @@ static const int get_button_x_position(const int i)
 EshyWMSwitcher::EshyWMSwitcher(Rect _menu_geometry, Color _menu_color) : EshyWMMenuBase(_menu_geometry, _menu_color), selected_option(0)
 {
     const char* class_name = "eshywm_switcher\0switcher";
-    Atom ATOM_CLASS = XInternAtom(DISPLAY, "WM_CLASS", False);
-    XChangeProperty(DISPLAY, menu_window, ATOM_CLASS, XA_STRING, 8, PropModeReplace, reinterpret_cast<const unsigned char*>(class_name), strlen(class_name));
-    XFlush(DISPLAY);
+    X11::change_window_property(menu_window, X11::atoms.window_class, XA_STRING, 8, (const unsigned char*)class_name);
+    XFlush(X11::get_display());
 
-    XGrabButton(DISPLAY, Button1, AnyModifier, menu_window, false, ButtonReleaseMask, GrabModeAsync, GrabModeAsync, None, None);
+    X11::grab_button(Button1, AnyModifier, menu_window, ButtonReleaseMask);
     
     /**
      * IMPORTANT: Keys do not send a release event if the key was registered after being pressed.
@@ -42,12 +42,12 @@ EshyWMSwitcher::EshyWMSwitcher(Rect _menu_geometry, Color _menu_color) : EshyWMM
      * I cannot grab alt after a Alt-Tab press becase then a release event will not be triggered.
      * I have to grab these asynchronously and enable KeyReleaseMask in ROOT. The issue is I now get and have to handle the event for EVERY key release, not just Alt.
     */
-    XGrabKey(DISPLAY, XKeysymToKeycode(DISPLAY, XK_Tab), Mod1Mask | 0, ROOT, true, GrabModeAsync, GrabModeAsync);
+    X11::grab_key(XK_Tab, Mod1Mask | 0, X11::get_root_window());
 }
 
 void EshyWMSwitcher::show()
 {
-    XMapWindow(DISPLAY, menu_window);
+    X11::map_window(menu_window);
     raise(true);
     b_menu_active = true;
 }
@@ -84,15 +84,9 @@ void EshyWMSwitcher::update_button_positions()
     
     set_size(width, height);
 
-    Window window_return;
-    int root_x;
-    int root_y;
-    int others;
-    uint mask_return;
+    const Pos cursor_position = X11::get_cursor_position();
 
-    XQueryPointer(DISPLAY, ROOT, &window_return, &window_return, &root_x, &root_y, &others, &others, &mask_return);
-
-    if(Output* output = output_at_position(root_x, root_y))
+    if(Output* output = output_at_position(cursor_position.x, cursor_position.y))
         set_position(center_x(output, width), center_y(output, height));
     else
         set_position(center_x(EshyWM::window_manager->outputs[0], width), center_y(EshyWM::window_manager->outputs[0], height));
@@ -167,31 +161,27 @@ void EshyWMSwitcher::select_option(int i)
     //Deselect previous
     if(i == 0 && switcher_window_options[switcher_window_options.size() - 1].button)
     {
-        XMoveWindow(DISPLAY, switcher_window_options[switcher_window_options.size() - 1].button->get_window(), get_button_x_position(switcher_window_options.size() - 1), EshyWMConfig::switcher_button_padding);
-        XSetWindowBorderWidth(DISPLAY, switcher_window_options[switcher_window_options.size() - 1].button->get_window(), 0);
+        X11::move_window(switcher_window_options[switcher_window_options.size() - 1].button->get_window(), Pos{get_button_x_position(switcher_window_options.size() - 1), (int)EshyWMConfig::switcher_button_padding});
+        X11::set_border_width(switcher_window_options[switcher_window_options.size() - 1].button->get_window(), 0);
     }
     else if(i > 0 && switcher_window_options[i - 1].button)
     {
-        XMoveWindow(DISPLAY, switcher_window_options[i - 1].button->get_window(), get_button_x_position(i - 1), EshyWMConfig::switcher_button_padding);
-        XSetWindowBorderWidth(DISPLAY, switcher_window_options[i - 1].button->get_window(), 0);
+        X11::move_window(switcher_window_options[i - 1].button->get_window(), Pos{get_button_x_position(i - 1), (int)EshyWMConfig::switcher_button_padding});
+        X11::set_border_width(switcher_window_options[i - 1].button->get_window(), 0);
     }
 
     if(switcher_window_options[i].button)
     {
-        XMoveWindow(DISPLAY, switcher_window_options[i].button->get_window(), get_button_x_position(i), EshyWMConfig::switcher_button_padding);
-        XSetWindowBorderWidth(DISPLAY, switcher_window_options[i].button->get_window(), 2);
+        X11::move_window(switcher_window_options[i].button->get_window(), Pos{get_button_x_position(i), (int)EshyWMConfig::switcher_button_padding});
+        X11::set_border_width(switcher_window_options[i].button->get_window(), 2);
     }
 }
 
 void EshyWMSwitcher::handle_option_chosen(const int i)
 {
-    Window returned_root;
-    Window returned_parent;
-    Window* top_level_windows;
-    unsigned int num_top_level_windows;
-    XQueryTree(DISPLAY, ROOT, &returned_root, &returned_parent, &top_level_windows, &num_top_level_windows);
+    const X11::WindowTree window_tree = X11::query_window_tree(X11::get_root_window());
 
-    if(switcher_window_options[i].window->get_frame() != top_level_windows[num_top_level_windows - 1])
+    if(switcher_window_options[i].window->get_frame() != window_tree.windows[window_tree.windows.size() - 1])
     {
         if(switcher_window_options[i].window->get_window_state() == WS_MINIMIZED)
             switcher_window_options[i].window->minimize_window(false);
@@ -199,8 +189,6 @@ void EshyWMSwitcher::handle_option_chosen(const int i)
         EshyWM::window_manager->focus_window(switcher_window_options[i].window, true);
         switcher_window_options[i].window->update_titlebar();
     }
-
-    XFree(top_level_windows);
 
     auto it = switcher_window_options.begin() + i;
     std::rotate(switcher_window_options.begin(), it, it + 1);

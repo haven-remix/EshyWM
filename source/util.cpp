@@ -175,16 +175,6 @@ void __log_event_info(LogSeverity severity, XEvent event)
 #endif
 
 
-Pos get_cursor_position(Display* display, Window root)
-{
-	Pos position;
-	Window window_return;
-    int others;
-    uint mask_return;
-    XQueryPointer(DISPLAY, ROOT, &window_return, &window_return, &position.x, &position.y, &others, &others, &mask_return);
-	return position;
-}
-
 int center_x(struct Output* output, int width)
 {
 	return output->geometry.x + ((output->geometry.width - width) / 2.0f);
@@ -219,37 +209,4 @@ Output* output_most_occupied(Rect geometry)
 	});
 
 	return it != EshyWM::window_manager->outputs.end() ? *it : nullptr;
-}
-
-
-void grab_key(int key, unsigned int main_modifier, Window window)
-{
-    XGrabKey(DISPLAY, key, main_modifier, window, false, GrabModeAsync, GrabModeAsync);
-    XGrabKey(DISPLAY, key, main_modifier | Mod2Mask, window, false, GrabModeAsync, GrabModeAsync);
-    XGrabKey(DISPLAY, key, main_modifier | LockMask, window, false, GrabModeAsync, GrabModeAsync);
-    XGrabKey(DISPLAY, key, main_modifier | Mod2Mask | LockMask, window, false, GrabModeAsync, GrabModeAsync);
-}
-
-void ungrab_key(int key, unsigned int main_modifier, Window window)
-{
-    XUngrabKey(DISPLAY, key, main_modifier, window);
-    XUngrabKey(DISPLAY, key, main_modifier | Mod2Mask, window);
-    XUngrabKey(DISPLAY, key, main_modifier | LockMask, window);
-    XUngrabKey(DISPLAY, key, main_modifier | Mod2Mask | LockMask, window);
-}
-
-void grab_button(int button, unsigned int main_modifier, Window window, unsigned int masks)
-{
-    XGrabButton(DISPLAY, button, main_modifier, window, false, masks, GrabModeAsync, GrabModeAsync, None, None);
-    XGrabButton(DISPLAY, button, main_modifier | Mod2Mask, window, false, masks, GrabModeAsync, GrabModeAsync, None, None);
-    XGrabButton(DISPLAY, button, main_modifier | LockMask, window, false, masks, GrabModeAsync, GrabModeAsync, None, None);
-    XGrabButton(DISPLAY, button, main_modifier | Mod2Mask | LockMask, window, false, masks, GrabModeAsync, GrabModeAsync, None, None);
-}
-
-void ungrab_button(int button, unsigned int main_modifier, Window window)
-{
-    XUngrabButton(DISPLAY, button, main_modifier, window);
-    XUngrabButton(DISPLAY, button, main_modifier | Mod2Mask, window);
-    XUngrabButton(DISPLAY, button, main_modifier | LockMask, window);
-    XUngrabButton(DISPLAY, button, main_modifier | Mod2Mask | LockMask, window);
 }

@@ -31,6 +31,7 @@ public:
         : titlebar_double_click{0, 0, 0}
         , click_cursor_position{0, 0}
         , focused_window(nullptr)
+        , currently_hovered_button(nullptr)
     {}
 
     void initialize();
@@ -41,8 +42,6 @@ public:
     void scan_outputs();
 
     void focus_window(EshyWMWindow* window, bool b_raise);
-
-    static Display* display;
 
     std::vector<Output*> outputs;
     std::vector<Workspace*> workspaces;
@@ -64,7 +63,7 @@ private:
     bool b_manipulating_with_keys = false;
     bool b_manipulating_with_titlebar = false;
 
-    std::shared_ptr<class Button> currently_hovered_button;
+    class Button* currently_hovered_button;
     Rect manipulating_window_geometry;
 
     void grab_keys();

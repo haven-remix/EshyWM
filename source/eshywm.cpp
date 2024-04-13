@@ -5,6 +5,7 @@
 #include "config.h"
 #include "switcher.h"
 #include "util.h"
+#include "X11.h"
 
 #include <X11/extensions/Xrandr.h>
 
@@ -23,9 +24,9 @@ bool EshyWM::initialize()
     window_manager = std::make_shared<WindowManager>();
     window_manager->initialize();
 
-    imlib_context_set_display(DISPLAY);
-    imlib_context_set_visual(DefaultVisual(DISPLAY, DefaultScreen(DISPLAY)));
-    imlib_context_set_colormap(DefaultColormap(DISPLAY, DefaultScreen(DISPLAY)));
+    imlib_context_set_display(X11::get_display());
+    imlib_context_set_visual(DefaultVisual(X11::get_display(), DefaultScreen(X11::get_display())));
+    imlib_context_set_colormap(DefaultColormap(X11::get_display(), DefaultScreen(X11::get_display())));
 
     switcher = std::make_shared<EshyWMSwitcher>(Rect{center_x(window_manager->outputs[0], 50), center_y(window_manager->outputs[0], EshyWMConfig::switcher_button_height), 50, 50}, EshyWMConfig::switcher_color);
 
@@ -37,7 +38,7 @@ bool EshyWM::initialize()
     window_manager->handle_preexisting_windows();
     System::begin_polling();
 
-    const int x11_file_descriptor = ConnectionNumber(DISPLAY);
+    const int x11_file_descriptor = ConnectionNumber(X11::get_display());
     fd_set in_file_descriptor_set;
     struct timeval time_value;
 

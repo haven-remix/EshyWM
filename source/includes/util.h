@@ -102,7 +102,6 @@ struct XPropertyReturn
     unsigned char* property_value = nullptr;
 };
 
-extern Pos get_cursor_position(Display* display, Window root);
 extern struct Output* output_at_position(int x, int y);
 extern struct Output* output_most_occupied(Rect geometry);
 
@@ -115,8 +114,3 @@ extern int center_y(struct Output* output, int height);
 extern void set_window_transparency(Window window, float transparency);
 extern void increment_window_transparency(Window window, float transparency);
 extern void decrement_window_transparency(Window window, float transparency);
-
-extern void grab_key(int key, unsigned int main_modifier, Window window);
-extern void ungrab_key(int key, unsigned int main_modifier, Window window);
-extern void grab_button(int button, unsigned int main_modifier, Window window, unsigned int masks);
-extern void ungrab_button(int button, unsigned int main_modifier, Window window);

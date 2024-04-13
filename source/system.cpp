@@ -1,7 +1,6 @@
 
 #include "system.h"
 #include "window_manager.h"
-#include "taskbar.h"
 #include "eshywm.h"
 
 #include <iostream>

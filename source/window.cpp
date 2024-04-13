@@ -7,7 +7,6 @@
 #include "config.h"
 #include "eshywm.h"
 #include "button.h"
-#include "taskbar.h"
 #include "switcher.h"
 #include "util.h"
 #include "X11.h"
@@ -24,28 +23,23 @@ constexpr int half_of(const int x)
 
 static bool retrieve_window_icon(Window window, Imlib_Image* icon)
 {
-    static const Atom ATOM_NET_WM_ICON = XInternAtom(DISPLAY, "_NET_WM_ICON", false);
-    static const Atom ATOM_CARDINAL = XInternAtom(DISPLAY, "CARDINAL", false);
-    static const Atom ATOM_CLASS = XInternAtom(DISPLAY, "WM_CLASS", False);
-    static const Atom ATOM_ICON_NAME = XInternAtom(DISPLAY, "WM_ICON_NAME", False);
-
     Atom type_return;
     int format_return;
     unsigned long nitems_return;
     unsigned long bytes_after_return;
     unsigned char* data_return = nullptr;
 
-    int status = XGetWindowProperty(DISPLAY, window, ATOM_NET_WM_ICON, 0, 1, false, ATOM_CARDINAL, &type_return, &format_return, &nitems_return, &bytes_after_return, &data_return);
+    int status = XGetWindowProperty(X11::get_display(), window, X11::atoms.window_icon, 0, 1, false, X11::atoms.cardinal, &type_return, &format_return, &nitems_return, &bytes_after_return, &data_return);
     if (status == Success && data_return)
     {
         const int width = *(unsigned int*)data_return;
         XFree(data_return);
 
-        XGetWindowProperty(DISPLAY, window, ATOM_NET_WM_ICON, 1, 1, false, ATOM_CARDINAL, &type_return, &format_return, &nitems_return, &bytes_after_return, &data_return);
+        XGetWindowProperty(X11::get_display(), window, X11::atoms.window_icon, 1, 1, false, X11::atoms.cardinal, &type_return, &format_return, &nitems_return, &bytes_after_return, &data_return);
         const int height = *(unsigned int*)data_return;
         XFree(data_return);
 
-        XGetWindowProperty(DISPLAY, window, ATOM_NET_WM_ICON, 2, width * height, false, ATOM_CARDINAL, &type_return, &format_return, &nitems_return, &bytes_after_return, &data_return);
+        XGetWindowProperty(X11::get_display(), window, X11::atoms.window_icon, 2, width * height, false, X11::atoms.cardinal, &type_return, &format_return, &nitems_return, &bytes_after_return, &data_return);
         uint32_t* img_data = new uint32_t[width * height];
         const ulong* ul = (ulong*)data_return;
 
@@ -59,7 +53,7 @@ static bool retrieve_window_icon(Window window, Imlib_Image* icon)
             return true;
     }
     
-    status = XGetWindowProperty(DISPLAY, window, ATOM_ICON_NAME, 0, 1024, False, AnyPropertyType, &type_return, &format_return, &nitems_return, &bytes_after_return, &data_return);
+    status = XGetWindowProperty(X11::get_display(), window, X11::atoms.window_icon_name, 0, 1024, False, AnyPropertyType, &type_return, &format_return, &nitems_return, &bytes_after_return, &data_return);
     if(status == Success && type_return != None && format_return == 8 && data_return)
     {
         *icon = imlib_load_image(std::string("/usr/share/icons/hicolor/256x256/apps/" + std::string((const char*)data_return) + ".png").c_str());
@@ -68,7 +62,7 @@ static bool retrieve_window_icon(Window window, Imlib_Image* icon)
             return true;
     }
 
-    status = XGetWindowProperty(DISPLAY, window, ATOM_CLASS, 0, 1024, False, AnyPropertyType, &type_return, &format_return, &nitems_return, &bytes_after_return, &data_return);
+    status = XGetWindowProperty(X11::get_display(), window, X11::atoms.window_class, 0, 1024, False, AnyPropertyType, &type_return, &format_return, &nitems_return, &bytes_after_return, &data_return);
     if(status == Success && type_return != None && format_return == 8 && data_return)
     {
         std::ifstream desktop_file("/usr/share/applications/" + std::string((const char*)data_return) + ".desktop");
@@ -127,31 +121,50 @@ void EshyWMWindow::frame_window()
 {
     const Pos offset = {0, (int)EshyWMConfig::titlebar_height};
     const Rect titlebar_geometry = {0, 0, (uint)frame_geometry.width, (uint)EshyWMConfig::titlebar_height};
-    frame = X11::frame_window(window, frame_geometry, offset, SubstructureRedirectMask | EnterWindowMask, EshyWMConfig::window_frame_border_width);
+
+    //Frame the window
+    frame = X11::create_window(frame_geometry, SubstructureRedirectMask | EnterWindowMask, EshyWMConfig::window_frame_border_width);
+    X11::reparent_window(window, frame, offset);
+
+    //In EshyWM, we set frame class to match the window to support compositors
+    if(const X11::WindowProperty class_property = X11::get_window_property(window, X11::atoms.window_class))
+    {
+        X11::change_window_property(frame, X11::atoms.window_class, XA_STRING, 8, (unsigned char*)class_property.property_value);
+    }
+
+    X11::map_window(frame);
+
+    //Add a titlebar to the window
     titlebar = X11::create_window(titlebar_geometry, VisibilityChangeMask, 0);
+    X11::reparent_window(titlebar, frame, {0});
     X11::map_window(titlebar);
 
-    cairo_titlebar_surface = cairo_xlib_surface_create(DISPLAY, titlebar, DefaultVisual(DISPLAY, 0), frame_geometry.width, EshyWMConfig::titlebar_height);
+    cairo_titlebar_surface = cairo_xlib_surface_create(X11::get_display(), titlebar, DefaultVisual(X11::get_display(), 0), frame_geometry.width, EshyWMConfig::titlebar_height);
     cairo_context = cairo_create(cairo_titlebar_surface);
-        
+
     const Rect initial_size = {0, 0, EshyWMConfig::titlebar_button_size, EshyWMConfig::titlebar_button_size};
     const button_color_data close_button_color = {EshyWMConfig::titlebar_button_normal_color, EshyWMConfig::close_button_color, EshyWMConfig::titlebar_button_pressed_color};
     close_button = new ImageButton(titlebar, initial_size, close_button_color, EshyWMConfig::close_button_image_path.c_str());
     close_button->click_callback = std::bind(std::mem_fn(&EshyWMWindow::close_window), this);
 
-    XFlush(DISPLAY);
+    XFlush(X11::get_display());
     set_window_state(WS_NORMAL);
     update_titlebar();
 }
 
 void EshyWMWindow::unframe_window()
 {
-    X11::reparent_window(window, ROOT, {0});
+    X11::reparent_window(window, X11::get_root_window(), {0});
     X11::destroy_window(frame);
     X11::destroy_window(titlebar);
 
-    cairo_surface_destroy(cairo_titlebar_surface);
-    cairo_destroy(cairo_context);
+    if(cairo_titlebar_surface && cairo_context)
+    {
+        cairo_surface_destroy(cairo_titlebar_surface);
+        cairo_destroy(cairo_context);
+        cairo_titlebar_surface = nullptr;
+        cairo_context = nullptr;
+    }
 }
 
 
@@ -169,7 +182,7 @@ void EshyWMWindow::set_window_state(EWindowState new_window_state)
         {WS_ANCHORED_DOWN, "anchored_down"}
     };
     
-    XStoreName(DISPLAY, frame, states.at(new_window_state));
+    XStoreName(X11::get_display(), frame, states.at(new_window_state));
     previous_state = window_state;
     window_state = new_window_state;
 }
@@ -178,7 +191,7 @@ void EshyWMWindow::minimize_window(bool b_minimize)
 {
     if(b_minimize && window_state != WS_MINIMIZED)
     {
-        XUnmapWindow(DISPLAY, get_frame());
+        X11::unmap_window(frame);
         fullscreen_window(false);
         set_window_state(WS_MINIMIZED);
     }
@@ -189,7 +202,7 @@ void EshyWMWindow::minimize_window(bool b_minimize)
             return;
 
         set_window_state(previous_state);
-        XMapWindow(DISPLAY, get_frame());
+        X11::map_window(frame);
         update_titlebar();
 
         //Restore the window to its previous state
@@ -260,34 +273,16 @@ void EshyWMWindow::fullscreen_window(bool b_fullscreen)
 
 void EshyWMWindow::close_window()
 {
-    XUnmapWindow(DISPLAY, window);
+    X11::unmap_window(window);
     unframe_window();
 
-    Atom* supported_protocols;
-    int num_supported_protocols;
-
-    //This is not a typical status return. This one is zero when it fails.
-    const int status = XGetWMProtocols(DISPLAY, window, &supported_protocols, &num_supported_protocols);
-
-    const bool b_protocol_exists = std::ranges::contains(std::span(supported_protocols, num_supported_protocols), X11::atoms.wm_delete_window);
-    if (status && b_protocol_exists)
+    const bool b_close_successful = X11::close_window(window);
+    if(!X11::close_window(window))
     {
-        XEvent message;
-        memset(&message, 0, sizeof(message));
-        message.xclient.type = ClientMessage;
-        message.xclient.message_type = X11::atoms.wm_protocols;
-        message.xclient.window = window;
-        message.xclient.format = 32;
-        message.xclient.data.l[0] = X11::atoms.wm_delete_window;
-        XSendEvent(DISPLAY, window, false, 0 , &message);
-    }
-    else
-    {
-        XKillClient(DISPLAY, window);
+        X11::kill_window(window);
     }
 
-    const X11::WindowProperty property = X11::get_window_property(window, X11::atoms.window_class);
-    if(property.status == Success)
+    if(const X11::WindowProperty property = X11::get_window_property(window, X11::atoms.window_class))
     {
         EshyWMConfig::add_window_close_state((const char*)property.property_value, get_window_state() == EWindowState::WS_MAXIMIZED ? "maximized" : "normal");
     }
@@ -462,7 +457,7 @@ void EshyWMWindow::move_window_absolute(int new_position_x, int new_position_y, 
 
     frame_geometry.x = new_position_x;
     frame_geometry.y = new_position_y;
-    XMoveWindow(DISPLAY, frame, new_position_x, new_position_y);
+    X11::move_window(frame, frame_geometry);
 
     //Update the workspace it is in
     if(Output* output = output_most_occupied(frame_geometry))
@@ -484,9 +479,9 @@ void EshyWMWindow::resize_window_absolute(uint new_size_x, uint new_size_y, bool
     frame_geometry.width = new_size_x;
     frame_geometry.height = new_size_y;
 
-    XResizeWindow(DISPLAY, frame, new_size_x, new_size_y);
-    XResizeWindow(DISPLAY, window, new_size_x, new_size_y - (b_show_titlebar ? EshyWMConfig::titlebar_height : 0));
-    XResizeWindow(DISPLAY, titlebar, new_size_x, EshyWMConfig::titlebar_height);
+    X11::resize_window(frame, frame_geometry);
+    X11::resize_window(window, Size{new_size_x, new_size_y - (b_show_titlebar ? EshyWMConfig::titlebar_height : 0)});
+    X11::resize_window(titlebar, Size{new_size_x, EshyWMConfig::titlebar_height});
     update_titlebar();
 
     //Update the workspace it is in
@@ -504,14 +499,14 @@ void EshyWMWindow::set_show_titlebar(bool b_new_show_titlebar)
 
     if(b_show_titlebar)
     {
-        XMapWindow(DISPLAY, titlebar);
-        XMoveWindow(DISPLAY, window, 0, EshyWMConfig::titlebar_height);
+        X11::map_window(titlebar);
+        X11::move_window(window, Pos{0, (int)EshyWMConfig::titlebar_height});
         resize_window_absolute(frame_geometry.width, frame_geometry.height, true);
     }
     else
     {
-        XUnmapWindow(DISPLAY, titlebar);
-        XMoveWindow(DISPLAY, window, 0, 0);
+        X11::unmap_window(titlebar);
+        X11::move_window(window, Pos{0});
         resize_window_absolute(frame_geometry.width, frame_geometry.height, true);
     }
 }
@@ -521,10 +516,10 @@ void EshyWMWindow::update_titlebar()
     if(!b_show_titlebar || !cairo_context)
         return;
     
-    XClearWindow(DISPLAY, titlebar);
+    XClearWindow(X11::get_display(), titlebar);
 
     XTextProperty name;
-    XGetWMName(DISPLAY, window, &name);
+    XGetWMName(X11::get_display(), window, &name);
 
     cairo_select_font_face(cairo_context, "Lato", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_NORMAL);
     cairo_set_font_size(cairo_context, 16);

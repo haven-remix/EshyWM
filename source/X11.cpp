@@ -7,6 +7,8 @@
 
 #include <assert.h>
 #include <string.h>
+#include <ranges>
+#include <algorithm>
 
 static Display* display = nullptr;
 
@@ -78,17 +80,139 @@ WindowTree::~WindowTree()
 }
 
 
+RRMonitorInfo::RRMonitorInfo(const RRMonitorInfo& other)
+{
+    XRRMonitorInfo* monitors_arr = new XRRMonitorInfo[monitors.size()];
+    for(int i = 0; i < monitors.size(); ++i)
+    {
+        monitors_arr[i] = other.monitors[i];
+    }
+    monitors = std::span(monitors_arr, monitors.size());
+}
+
+RRMonitorInfo::RRMonitorInfo(RRMonitorInfo&& other)
+{
+    monitors = other.monitors;
+    other.monitors = std::span<XRRMonitorInfo>();
+}
+
+RRMonitorInfo::~RRMonitorInfo()
+{
+    XFree(monitors.data());
+}
+
+
+const RRMonitorInfo get_monitors()
+{
+    assert(display);
+    int n_monitors;
+    XRRMonitorInfo* found_monitors = XRRGetMonitors(display, DefaultRootWindow(display), false, &n_monitors);
+    RRMonitorInfo monitor_info;
+    monitor_info.monitors = std::span<XRRMonitorInfo>(found_monitors, n_monitors);
+    return std::move(monitor_info);
+}
+
+
+const std::string get_atom_name(Atom name)
+{
+    assert(display);
+    return XGetAtomName(display, name);
+}
+
+
 void set_display(Display* _display)
 {
     display = _display;
 }
+
+Display* get_display()
+{
+    assert(display);
+    return display;
+}
+
+Window get_root_window()
+{
+    assert(display);
+    return DefaultRootWindow(display);
+}
+
+
+const bool grab_server()
+{
+    assert(display);
+    return XGrabServer(display) == Success;
+}
+
+const bool ungrab_server()
+{
+    assert(display);
+    return XUngrabServer(display) == Success;
+}
+
+
+const bool allow_events(int event_mode, Time time)
+{
+    assert(display);
+    return XAllowEvents(display, event_mode, time) == Success;
+}
+
+
+const Pos get_cursor_position()
+{
+    assert(display);
+    Pos position;
+	Window window_return;
+    int others;
+    uint mask_return;
+    XQueryPointer(display, DefaultRootWindow(display), &window_return, &window_return, &position.x, &position.y, &others, &others, &mask_return);
+	return position;
+}
+
+
+void grab_key(KeySym key_sym, unsigned int main_modifier, Window window)
+{
+    assert(display);
+    XGrabKey(display, XKeysymToKeycode(display, key_sym), main_modifier | Mod2Mask, window, false, GrabModeAsync, GrabModeAsync);
+    XGrabKey(display, XKeysymToKeycode(display, key_sym), main_modifier, window, false, GrabModeAsync, GrabModeAsync);
+    XGrabKey(display, XKeysymToKeycode(display, key_sym), main_modifier | LockMask, window, false, GrabModeAsync, GrabModeAsync);
+    XGrabKey(display, XKeysymToKeycode(display, key_sym), main_modifier | Mod2Mask | LockMask, window, false, GrabModeAsync, GrabModeAsync);
+}
+
+void ungrab_key(KeySym key_sym, unsigned int main_modifier, Window window)
+{
+    assert(display);
+    XUngrabKey(display, XKeysymToKeycode(display, key_sym), main_modifier, window);
+    XUngrabKey(display, XKeysymToKeycode(display, key_sym), main_modifier | Mod2Mask, window);
+    XUngrabKey(display, XKeysymToKeycode(display, key_sym), main_modifier | LockMask, window);
+    XUngrabKey(display, XKeysymToKeycode(display, key_sym), main_modifier | Mod2Mask | LockMask, window);
+}
+
+void grab_button(int button, unsigned int main_modifier, Window window, unsigned int masks)
+{
+    assert(display);
+    XGrabButton(display, button, main_modifier, window, false, masks, GrabModeAsync, GrabModeAsync, None, None);
+    XGrabButton(display, button, main_modifier | Mod2Mask, window, false, masks, GrabModeAsync, GrabModeAsync, None, None);
+    XGrabButton(display, button, main_modifier | LockMask, window, false, masks, GrabModeAsync, GrabModeAsync, None, None);
+    XGrabButton(display, button, main_modifier | Mod2Mask | LockMask, window, false, masks, GrabModeAsync, GrabModeAsync, None, None);
+}
+
+void ungrab_button(int button, unsigned int main_modifier, Window window)
+{
+    assert(display);
+    XUngrabButton(display, button, main_modifier, window);
+    XUngrabButton(display, button, main_modifier | Mod2Mask, window);
+    XUngrabButton(display, button, main_modifier | LockMask, window);
+    XUngrabButton(display, button, main_modifier | Mod2Mask | LockMask, window);
+}
+
 
 const WindowAttributes get_window_attributes(Window window)
 {
     assert(display);
     XWindowAttributes attr = { 0 };
     XGetWindowAttributes(display, window, &attr);
-    return {attr.x, attr.y, (uint)attr.width, (uint)attr.height, attr.map_state, attr.override_redirect};
+    return {attr.x, attr.y, (uint)attr.width, (uint)attr.height, attr.map_state, (bool)attr.override_redirect};
 }
 
 const WindowProperty get_window_property(Window window, Atom property)
@@ -98,6 +222,13 @@ const WindowProperty get_window_property(Window window, Atom property)
     window_property.status = XGetWindowProperty(display, window, property, 0, 1024, False, AnyPropertyType, &window_property.type, &window_property.format, &window_property.n_items, &window_property.bytes_after, &window_property.property_value);
 	return std::move(window_property);
 }
+
+const bool change_window_property(Window window, Atom property, Atom type, const int size, const unsigned char* new_property)
+{
+    assert(display);
+    return XChangeProperty(display, window, atoms.window_class, type, size, PropModeReplace, new_property, strlen((const char*)new_property)) == Success;
+}
+
 
 const WindowTree query_window_tree(Window window)
 {
@@ -110,23 +241,6 @@ const WindowTree query_window_tree(Window window)
     return std::move(window_tree);
 }
 
-const Window frame_window(Window window, const Rect& geometry, const Pos& offset, long input_masks, int border_width)
-{
-    assert(display);
-    Window frame = create_window(geometry, input_masks, border_width);
-    reparent_window(window, frame, offset);
-
-    //In EshyWM, we set frame class to match the window to support compositors
-    const WindowProperty class_property = X11::get_window_property(window, atoms.window_class);
-    if(class_property.status == Success && class_property.type != None && class_property.format == 8)
-    {
-        const unsigned char* property = (unsigned char*)class_property.property_value;
-        XChangeProperty(display, frame, atoms.window_class, XA_STRING, 8, PropModeReplace, property, strlen((const char*)property));
-    }
-
-    map_window(frame);
-    return frame;
-}
 
 const Window create_window(const Rect& geometry, long input_masks, int border_width)
 {
@@ -136,46 +250,117 @@ const Window create_window(const Rect& geometry, long input_masks, int border_wi
     return window;
 }
 
-void destroy_window(Window window)
+const bool set_border_width(Window window, int border_width)
 {
     assert(display);
-    //unmap_window(window);
-    XDestroyWindow(display, window);
+    return XSetWindowBorderWidth(display, window, border_width) == Success;
 }
 
-void set_input_masks(Window window, long input_masks)
+const bool set_border_color(Window window, Color border_color)
 {
     assert(display);
-    XSelectInput(display, window, input_masks);
+    return XSetWindowBorder(display, window, border_color) == Success;
 }
 
-void map_window(Window window)
+const bool set_background_color(Window window, Color background_color)
 {
     assert(display);
-    XMapWindow(display, window);
+    return XSetWindowBackground(display, window, background_color) == Success;
 }
 
-void unmap_window(Window window)
+const bool close_window(Window window)
 {
-    assert(display);
-    XUnmapWindow(display, window);
+    Atom* supported_protocols;
+    int num_supported_protocols;
+    const int status = XGetWMProtocols(display, window, &supported_protocols, &num_supported_protocols);
+
+    const bool b_protocol_exists = std::ranges::contains(std::span(supported_protocols, num_supported_protocols), X11::atoms.wm_delete_window);
+
+    if(b_protocol_exists)
+    {
+        XEvent message;
+        memset(&message, 0, sizeof(message));
+        message.xclient.type = ClientMessage;
+        message.xclient.message_type = X11::atoms.wm_protocols;
+        message.xclient.window = window;
+        message.xclient.format = 32;
+        message.xclient.data.l[0] = X11::atoms.wm_delete_window;
+        XSendEvent(display, window, false, 0 , &message);
+        return true;
+    }
+
+    return false;
 }
 
-void reparent_window(Window window, Window parent, const Pos& offset)
+const bool kill_window(Window window)
 {
-    assert(display);
-    XReparentWindow(display, window, parent, offset.x, offset.y);
+    return XKillClient(display, window) == Success;
 }
 
-void resize_window(Window window, const Size& size)
+const bool destroy_window(Window window)
 {
     assert(display);
-    XResizeWindow(display, window, size.width, size.height);
+    unmap_window(window);
+    return XDestroyWindow(display, window) == Success;
 }
 
-void resize_window(Window window, const Rect& size)
+const bool set_input_masks(Window window, long input_masks)
 {
     assert(display);
-    XResizeWindow(display, window, size.width, size.height);
+    return XSelectInput(display, window, input_masks) == Success;
+}
+
+const bool map_window(Window window)
+{
+    assert(display);
+    return XMapWindow(display, window) == Success;
+}
+
+const bool unmap_window(Window window)
+{
+    assert(display);
+    return XUnmapWindow(display, window) == Success;
+}
+
+const bool reparent_window(Window window, Window parent, const Pos& offset)
+{
+    assert(display);
+    return XReparentWindow(display, window, parent, offset.x, offset.y) == Success;
+}
+
+const bool focus_window(Window window)
+{
+    assert(display);
+    return XSetInputFocus(display, window, RevertToNone, CurrentTime) == Success;
+}
+
+const bool raise_window(Window window)
+{
+    assert(display);
+    return XRaiseWindow(display, window) == Success;
+}
+
+const bool move_window(Window window, const Pos& pos)
+{
+    assert(display);
+    return XMoveWindow(display, window, pos.x, pos.y) == Success;
+}
+
+const bool move_window(Window window, const Rect& pos)
+{
+    assert(display);
+    return XMoveWindow(display, window, pos.x, pos.y) == Success;
+}
+
+const bool resize_window(Window window, const Size& size)
+{
+    assert(display);
+    return XResizeWindow(display, window, size.width, size.height) == Success;
+}
+
+const bool resize_window(Window window, const Rect& size)
+{
+    assert(display);
+    return XResizeWindow(display, window, size.width, size.height) == Success;
 }
 };

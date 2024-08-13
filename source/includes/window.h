@@ -55,18 +55,21 @@ public:
     void update_titlebar();
 
     void set_show_titlebar(bool b_new_show_titlebar);
+    void set_show_border(bool b_show_border);
 
     /**Getters*/
-    const Window get_window() const {return window;}
-    const Window get_frame() const {return frame;}
-    const Window get_titlebar() const {return titlebar;}
-    const Rect& get_frame_geometry() const {return frame_geometry;}
-    const Imlib_Image get_window_icon() const {return window_icon;}
-    const EWindowState get_window_state() const {return window_state;}
+    inline const Window get_window() const {return window;}
+    inline const Window get_frame() const {return frame;}
+    inline const Window get_titlebar() const {return titlebar;}
+    inline const Rect& get_frame_geometry() const {return frame_geometry;}
+    inline const Imlib_Image get_window_icon() const {return window_icon;}
+    inline const EWindowState get_window_state() const {return window_state;}
 
-    class WindowButton* get_close_button() const {return close_button;}
+    inline class WindowButton* get_close_button() const {return close_button;}
 
     Workspace* parent_workspace;
+
+    bool b_show_titlebar;
 
 private:
 
@@ -79,7 +82,6 @@ private:
     EWindowState previous_state;
 
     EWindowState window_state;
-    bool b_show_titlebar;
 
     Imlib_Image window_icon;
 

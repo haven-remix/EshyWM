@@ -1,7 +1,6 @@
 #include "window_manager.h"
 #include "eshywm.h"
 #include "window.h"
-#include "config.h"
 #include "switcher.h"
 #include "button.h"
 #include "X11.h"
@@ -173,6 +172,8 @@ void WindowManager::grab_keys()
     }
 
     X11::grab_key(XK_e | XK_E, Mod4Mask, root);
+    X11::grab_key(XK_t | XK_T, Mod4Mask, root);
+    X11::grab_key(XK_b | XK_B, Mod4Mask, root);
 
     //Workspace controls
     X11::grab_key(XK_1, Mod4Mask, root);
@@ -282,14 +283,14 @@ EshyWMWindow* WindowManager::register_window(Window window, bool b_was_created_b
 
     //If window was previously maximized when it was closed, then maximize again. Otherwise center and clamp size
     const X11::WindowProperty class_property = X11::get_window_property(window, X11::atoms.window_class);
-    const std::string window_name = std::string((const char*)class_property.property_value);
+    const std::string window_name = class_property.property_value == nullptr ? "NONE" : std::string((const char*)class_property.property_value);
     const bool b_begin_maximized = EshyWMConfig::window_close_data.contains(window_name) && EshyWMConfig::window_close_data[window_name] == "maximized";;
 
     //Create window
     EshyWMWindow* new_window = new EshyWMWindow(window, output->active_workspace, window_attributes.geometry);
     new_window->frame_window();
     new_window->maximize_window(b_begin_maximized);
-    window_list.push_back(new_window); 
+    window_list.push_back(new_window);
 
     EshyWM::window_created_notify(new_window);
     return new_window;
@@ -340,8 +341,6 @@ void WindowManager::focus_window(EshyWMWindow* window, bool b_raise)
     Window win = window->get_window();
     X11::change_window_property(X11::get_root_window(), X11::atoms.active_window, XA_WINDOW, 32, (const unsigned char*)&win);
     X11::focus_window(window->get_window());
-    //XChangeProperty(DISPLAY, ROOT, X11::atoms.active_window, XA_WINDOW, 32, PropModeReplace, (unsigned char*)&win, 1);
-    //XSetInputFocus(DISPLAY, window->get_window(), RevertToNone, CurrentTime);
 
     focused_window = window;
 
@@ -404,41 +403,22 @@ void WindowManager::handle_button_hovered(Window hovered_window, bool b_hovered,
 
 void WindowManager::OnDestroyNotify(const XDestroyWindowEvent& event)
 {
-    if (EshyWMWindow* window = contains_xwindow(event.window))
+    Dock* found_dock = nullptr;
+    for (Output* output : outputs)
     {
-        window->unframe_window();
-        EshyWM::window_destroyed_notify(window);
-        window_list.erase(std::ranges::find(window_list, window));
+        found_dock = (output->top_dock && output->top_dock->window == event.window) ? output->top_dock
+            : (output->bottom_dock && output->bottom_dock->window == event.window) ? output->bottom_dock
+            : nullptr;
 
-        if(focused_window == window)
+        if (found_dock)
         {
-            EshyWMWindow* window = window_list.size() > 0 ? window_list[0] : nullptr;
-            const bool b_raise_window = window_list.size() > 0 && focused_window == window_list[0];
-            focus_window(window, b_raise_window);
+            found_dock->parent_output->remove_dock(found_dock);
+            break;
         }
-
-        //At this point the window and all pointers associated with it have been dealt with
-        delete window;
     }
-    else
-    {
-        Dock* found_dock = nullptr;
-        for (Output* output : outputs)
-        {
-            found_dock = (output->top_dock && output->top_dock->window == event.window) ? output->top_dock
-                : (output->bottom_dock && output->bottom_dock->window == event.window) ? output->bottom_dock
-                : nullptr;
 
-            if (found_dock)
-            {
-                found_dock->parent_output->remove_dock(found_dock);
-                break;
-            }
-        }
-
-        //At this point the dock and all pointers associated with it have been dealt with
-        delete found_dock;
-    }
+    //At this point the dock and all pointers associated with it have been dealt with
+    delete found_dock;
 }
 
 void WindowManager::OnMapNotify(const XMapEvent& event)
@@ -448,7 +428,35 @@ void WindowManager::OnMapNotify(const XMapEvent& event)
 
 void WindowManager::OnUnmapNotify(const XUnmapEvent& event)
 {
-    
+    /**
+     * The reason this is here is because of stupid popups.
+     * Reason this does not kill normal windows is because we only unmap the frame for those.
+     * As a consequence, we need to keep it that way. Only unmap frames unless we want the thing dead.
+     * Corallaraly, we do need to unmap the window to actually kill it.
+     * 
+     * Destroy notify is not run for popups so I cannot place this logic there.
+    */
+    if (EshyWMWindow* window = contains_xwindow(event.window))
+    {
+        if(currently_hovered_button == window->get_close_button())
+        {
+            currently_hovered_button = nullptr;
+        }
+        
+        window->unframe_window();
+        EshyWM::window_destroyed_notify(window);
+        window_list.erase(std::ranges::find(window_list, window));
+
+        if(focused_window == window)
+        {
+            EshyWMWindow* new_window = window_list.size() > 0 ? window_list[0] : nullptr;
+            const bool b_raise_window = window_list.size() > 0 && focused_window == window_list[0];
+            focus_window(new_window, b_raise_window);
+        }
+
+        //At this point the window and all pointers associated with it have been dealt with
+        delete window;
+    }
 }
 
 void WindowManager::OnMapRequest(const XMapRequestEvent& event)
@@ -664,6 +672,22 @@ void WindowManager::OnKeyPress(const XKeyEvent& event)
     }
     ELSE_CHECK_KEYSYM_AND_MOD_PRESSED(event, Mod4Mask, XK_e | XK_E)
     EshyWM::b_terminate = true;
+    ELSE_CHECK_KEYSYM_AND_MOD_PRESSED(event, Mod4Mask, XK_t | XK_T)
+    {
+        b_show_titlebars = !b_show_titlebars;
+        for(EshyWMWindow* window : window_list)
+        {
+            window->set_show_titlebar(b_show_titlebars);
+        }
+    }
+    ELSE_CHECK_KEYSYM_AND_MOD_PRESSED(event, Mod4Mask, XK_b | XK_B)
+    {
+        b_show_window_borders = !b_show_window_borders;
+        for(EshyWMWindow* window : window_list)
+        {
+            window->set_show_border(b_show_window_borders);
+        }
+    }
     ELSE_CHECK_KEYSYM_AND_MOD_PRESSED(event, Mod4Mask, XK_1)
     attempt_activate_workspace(0);
     ELSE_CHECK_KEYSYM_AND_MOD_PRESSED(event, Mod4Mask, XK_2)

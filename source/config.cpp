@@ -25,6 +25,7 @@ ulong EshyWMConfig::titlebar_button_normal_color = 0x15141f;
 ulong EshyWMConfig::titlebar_button_hovered_color = 0x423d66;
 ulong EshyWMConfig::titlebar_button_pressed_color = 0x0d0c14;
 ulong EshyWMConfig::titlebar_title_color = 0xededed;
+bool EshyWMConfig::titlebar = true;
 //Switcher
 uint EshyWMConfig::switcher_button_height = 140;
 uint EshyWMConfig::switcher_button_padding = 20;
@@ -50,7 +51,8 @@ enum VarType
     VT_ULONG,
     VT_ULONG_HEX,
     VT_FLOAT,
-    VT_STRING
+    VT_STRING,
+    VT_BOOL
 };
 
 struct key_value_pair
@@ -92,6 +94,9 @@ static void parse_config_option(std::string line, VarType type, void* config_var
         break;
     case VarType::VT_STRING:
         *(std::string*)config_var = kvp.value;
+        break;
+    case VarType::VT_BOOL:
+        *(bool*)config_var = kvp.value == "true";
         break;
     };
 }
@@ -157,6 +162,7 @@ void EshyWMConfig::update_config()
         parse_config_option(line, VT_ULONG_HEX, &titlebar_button_hovered_color, "titlebar_button_hovered_color");
         parse_config_option(line, VT_ULONG_HEX, &titlebar_button_pressed_color, "titlebar_button_pressed_color");
         parse_config_option(line, VT_ULONG_HEX, &titlebar_title_color, "titlebar_title_color");
+        parse_config_option(line, VT_BOOL, &titlebar, "titlebar");
 
         parse_config_option(line, VT_ULONG, &switcher_button_height, "switcher_button_height");
         parse_config_option(line, VT_ULONG, &switcher_button_padding, "switcher_button_padding");

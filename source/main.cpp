@@ -21,5 +21,14 @@ int main(int argc, char** argv)
             SET_GLOBAL_SEVERITY(LS_Fatal)
     }
 
-    return EshyWM::initialize();
+    try
+    {
+        EshyWM::initialize();
+    }
+    catch(const std::logic_error& e)
+    {
+        std::cout << "This is an EshyMail error: START " << e.what() << " END " << std::endl;
+    }
+
+    return 0;
 }

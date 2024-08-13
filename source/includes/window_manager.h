@@ -3,6 +3,7 @@
 #include "window.h"
 #include "util.h"
 #include "container.h"
+#include "config.h"
 
 #include <Imlib2.h>
 
@@ -32,6 +33,10 @@ public:
         , click_cursor_position{0, 0}
         , focused_window(nullptr)
         , currently_hovered_button(nullptr)
+        , b_manipulating_with_keys(false)
+        , b_manipulating_with_titlebar(false)
+        , b_show_window_borders(EshyWMConfig::window_frame_border_width != 0)
+        , b_show_titlebars(EshyWMConfig::titlebar)
     {}
 
     void initialize();
@@ -48,6 +53,9 @@ public:
     std::vector<EshyWMWindow*> window_list;
 
     EshyWMWindow* focused_window;
+
+    bool b_show_window_borders;
+    bool b_show_titlebars;
 
 private:
 

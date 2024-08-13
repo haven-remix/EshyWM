@@ -29,6 +29,7 @@ namespace EshyWMConfig
     extern ulong titlebar_button_hovered_color;
     extern ulong titlebar_button_pressed_color;
     extern ulong titlebar_title_color;
+    extern bool titlebar;
 
     /**Switcher*/
     extern uint switcher_button_height;

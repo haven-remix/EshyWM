@@ -91,7 +91,7 @@
 				}
 			],
 			"type" : "INTERNAL",
-			"value" : "27"
+			"value" : "28"
 		},
 		{
 			"name" : "CMAKE_CACHE_PATCH_VERSION",
@@ -103,7 +103,7 @@
 				}
 			],
 			"type" : "INTERNAL",
-			"value" : "8"
+			"value" : "6"
 		},
 		{
 			"name" : "CMAKE_COLOR_DIAGNOSTICS",
@@ -127,7 +127,7 @@
 				}
 			],
 			"type" : "INTERNAL",
-			"value" : "/home/eshy/clion-2023.3.4/bin/cmake/linux/x64/bin/cmake"
+			"value" : "/home/eshy/clion/clion-2024.1.5/bin/cmake/linux/x64/bin/cmake"
 		},
 		{
 			"name" : "CMAKE_CPACK_COMMAND",
@@ -139,7 +139,7 @@
 				}
 			],
 			"type" : "INTERNAL",
-			"value" : "/home/eshy/clion-2023.3.4/bin/cmake/linux/x64/bin/cpack"
+			"value" : "/home/eshy/clion/clion-2024.1.5/bin/cmake/linux/x64/bin/cpack"
 		},
 		{
 			"name" : "CMAKE_CTEST_COMMAND",
@@ -151,7 +151,7 @@
 				}
 			],
 			"type" : "INTERNAL",
-			"value" : "/home/eshy/clion-2023.3.4/bin/cmake/linux/x64/bin/ctest"
+			"value" : "/home/eshy/clion/clion-2024.1.5/bin/cmake/linux/x64/bin/ctest"
 		},
 		{
 			"name" : "CMAKE_CXX_COMPILER",
@@ -727,7 +727,7 @@
 				}
 			],
 			"type" : "UNINITIALIZED",
-			"value" : "/home/eshy/clion-2023.3.4/bin/ninja/linux/x64/ninja"
+			"value" : "/home/eshy/clion/clion-2024.1.5/bin/ninja/linux/x64/ninja"
 		},
 		{
 			"name" : "CMAKE_MODULE_LINKER_FLAGS",
@@ -1019,7 +1019,7 @@
 				}
 			],
 			"type" : "INTERNAL",
-			"value" : "/home/eshy/clion-2023.3.4/bin/cmake/linux/x64/share/cmake-3.27"
+			"value" : "/home/eshy/clion/clion-2024.1.5/bin/cmake/linux/x64/share/cmake-3.28"
 		},
 		{
 			"name" : "CMAKE_SHARED_LINKER_FLAGS",
@@ -1423,7 +1423,7 @@
 				}
 			],
 			"type" : "INTERNAL",
-			"value" : "-I/usr/include/freetype2;-I/usr/include/libpng16;-I/usr/include/harfbuzz;-I/usr/include/glib-2.0;-I/usr/lib/glib-2.0/include;-I/usr/include/sysprof-6;-pthread"
+			"value" : "-I/usr/include;-I/usr/include/freetype2;-I/usr/include/libpng16;-I/usr/include/harfbuzz;-I/usr/include/glib-2.0;-I/usr/lib/glib-2.0/include;-I/usr/include/sysprof-6;-pthread"
 		},
 		{
 			"name" : "PKG_FONTCONFIG_CFLAGS_I",
@@ -1483,7 +1483,7 @@
 				}
 			],
 			"type" : "INTERNAL",
-			"value" : "/usr/include/freetype2;/usr/include/libpng16;/usr/include/harfbuzz;/usr/include/glib-2.0;/usr/lib/glib-2.0/include;/usr/include/sysprof-6"
+			"value" : "/usr/include;/usr/include/freetype2;/usr/include/libpng16;/usr/include/harfbuzz;/usr/include/glib-2.0;/usr/lib/glib-2.0/include;/usr/include/sysprof-6"
 		},
 		{
 			"name" : "PKG_FONTCONFIG_LDFLAGS",
@@ -1627,7 +1627,7 @@
 				}
 			],
 			"type" : "INTERNAL",
-			"value" : "-I/usr/include/freetype2;-I/usr/include/libpng16;-I/usr/include/harfbuzz;-I/usr/include/glib-2.0;-I/usr/lib/glib-2.0/include;-I/usr/include/sysprof-6;-pthread;-DXML_STATIC"
+			"value" : "-I/usr/include;-I/usr/include/freetype2;-I/usr/include/libpng16;-I/usr/include/harfbuzz;-I/usr/include/glib-2.0;-I/usr/lib/glib-2.0/include;-I/usr/include/sysprof-6;-pthread;-DXML_STATIC"
 		},
 		{
 			"name" : "PKG_FONTCONFIG_STATIC_CFLAGS_I",
@@ -1663,7 +1663,7 @@
 				}
 			],
 			"type" : "INTERNAL",
-			"value" : "/usr/include/freetype2;/usr/include/libpng16;/usr/include/harfbuzz;/usr/include/glib-2.0;/usr/lib/glib-2.0/include;/usr/include/sysprof-6"
+			"value" : "/usr/include;/usr/include/freetype2;/usr/include/libpng16;/usr/include/harfbuzz;/usr/include/glib-2.0;/usr/lib/glib-2.0/include;/usr/include/sysprof-6"
 		},
 		{
 			"name" : "PKG_FONTCONFIG_STATIC_LDFLAGS",

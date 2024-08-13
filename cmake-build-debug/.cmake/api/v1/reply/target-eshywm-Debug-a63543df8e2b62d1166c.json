@@ -80,7 +80,8 @@
 				7,
 				8,
 				9,
-				10
+				10,
+				11
 			]
 		}
 	],
@@ -143,7 +144,8 @@
 				7,
 				8,
 				9,
-				10
+				10,
+				11
 			]
 		}
 	],
@@ -165,6 +167,12 @@
 			"backtrace" : 1,
 			"compileGroupIndex" : 0,
 			"path" : "source/util.cpp",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 0,
+			"path" : "source/X11.cpp",
 			"sourceGroupIndex" : 0
 		},
 		{

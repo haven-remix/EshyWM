@@ -47,7 +47,6 @@ WindowButton::WindowButton(Window parent_window, const Rect& _button_geometry, c
 
     button_window = X11::create_window(button_geometry, StructureNotifyMask | VisibilityChangeMask | EnterWindowMask | LeaveWindowMask | KeyPressMask | KeyReleaseMask, 0);
     X11::reparent_window(button_window, parent_window, {});
-    //button_window = XCreateSimpleWindow(DISPLAY, parent_window, 0, 0, button_geometry.width, button_geometry.height, 0, 0, _background_color.normal);
     X11::map_window(button_window);
     XSync(X11::get_display(), false);
 }
@@ -93,23 +92,18 @@ void WindowButton::on_update_state()
 
 ImageButton::~ImageButton()
 {
-    if(!b_using_preloaded_image)
-    {
-        imlib_context_set_image(button_image);
-        imlib_free_image();
-    }
+    delete button_image;
 }
 
 void ImageButton::draw()
 {
-    imlib_context_set_drawable(button_window);
-    imlib_context_set_image(button_image);
-    imlib_image_set_has_alpha(1);
-    imlib_render_image_on_drawable_at_size(0, 0, button_geometry.width, button_geometry.height);
+    button_image->draw(button_window, 0, 0, button_geometry.width, button_geometry.height);
 }
 
 void ImageButton::set_image(const Imlib_Image& new_image)
 {
-    button_image = new_image;
+    delete button_image;
+    button_image = new Image(new_image);
     draw();
 }
+

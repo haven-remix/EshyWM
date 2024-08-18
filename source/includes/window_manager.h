@@ -18,11 +18,30 @@
  * In WindowManager, we store a list of outputs and workspaces.
  * Each output will have a top and bottom dock and space for the active workspace.
  * 
- * The Workspace list is not attached to any output. Only the actve workspace is.
+ * The Workspace list is not attached to any output. Only the active workspace is.
  * This means any output can grab any workspace as it choses, but only one at a time.
  * 
- * An output represents a monitor. A workspace is a arbitrary collection of windows used
- * primarly for organzation.
+ * An output represents a monitor. A workspace is an arbitrary collection of windows used
+ * primarily for organization.
+ * 
+ * The WindowManager class only manages the interaction between windows, user input,
+ * system events, and NOT the windows' usage.
+ * 
+ * The Window class manages the usage of the window (resizing, moving, closing, etc.).
+ * That said, the WindowManager is responsible for relaying those events to the window.
+ * 
+ * X11 is a file of utility classes to C++-ify X code to make its usage easier and more consistent.
+ * 
+ * The System namespace is for managing pure system things like battery, time, etc.
+ * 
+ * The Utils file defines common data structures (Pos, Rect, etc.) and common functionality (retrieving
+ * cursor position, finding position to center the window on the screen, etc.)
+ * 
+ * The Config file defines configuration. The configuration is pulled from the eshywm.conf file at startup.
+ * The configuration can be changed temporary through usage. For example, titlebars can be hidden using
+ * a hotkey. These changes only last the duration of the session. Permanent changes will soon be supported
+ * with some kind of settings menu. Perhaps a configuration retention feature will also be added so all
+ * session changes will remain across startups.
 */
 class WindowManager
 {
@@ -36,7 +55,6 @@ public:
         , b_manipulating_with_keys(false)
         , b_manipulating_with_titlebar(false)
         , b_show_window_borders(EshyWMConfig::window_frame_border_width != 0)
-        , b_show_titlebars(EshyWMConfig::titlebar)
     {}
 
     void initialize();
@@ -46,16 +64,15 @@ public:
     //Uses XRandR to scan outputs and generates relevant Outputs
     void scan_outputs();
 
-    void focus_window(EshyWMWindow* window, bool b_raise);
+    void focus_window(std::shared_ptr<EshyWMWindow> window, bool b_raise);
 
-    std::vector<Output*> outputs;
-    std::vector<Workspace*> workspaces;
-    std::vector<EshyWMWindow*> window_list;
+    std::vector<std::shared_ptr<Output>> outputs;
+    std::vector<std::shared_ptr<Workspace>> workspaces;
+    std::vector<std::shared_ptr<EshyWMWindow>> window_list;
 
-    EshyWMWindow* focused_window;
+    std::shared_ptr<EshyWMWindow> focused_window;
 
     bool b_show_window_borders;
-    bool b_show_titlebars;
 
 private:
 
@@ -63,7 +80,7 @@ private:
 
     struct double_click_data
     {
-        EshyWMWindow* window;
+        std::shared_ptr<EshyWMWindow> window;
         Time first_click_time;
         Time last_double_click_time;
     } titlebar_double_click;
@@ -93,10 +110,10 @@ private:
     void OnEnterNotify(const XCrossingEvent& event);
     void OnClientMessage(const XClientMessageEvent& event);
 
-    EshyWMWindow* register_window(Window window, bool b_was_created_before_window_manager);
-    Dock* register_dock(Window window, bool b_was_created_before_window_manager);
+    std::shared_ptr<EshyWMWindow> register_window(Window window, bool b_was_created_before_window_manager);
+    std::shared_ptr<Dock> register_dock(Window window, bool b_was_created_before_window_manager);
 
     void handle_button_hovered(Window hovered_window, bool b_hovered, int mode);
 
-    EshyWMWindow* contains_xwindow(Window window);
+    std::shared_ptr<EshyWMWindow> contains_xwindow(Window window);
 };

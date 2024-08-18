@@ -29,6 +29,10 @@ int main(int argc, char** argv)
     {
         std::cout << "This is an EshyMail error: START " << e.what() << " END " << std::endl;
     }
+    catch(const std::exception& e)
+    {
+        std::cout << "This is an EshyMail error: START " << e.what() << " END " << std::endl;
+    }
 
     return 0;
 }

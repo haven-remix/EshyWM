@@ -102,14 +102,14 @@ struct XPropertyReturn
     unsigned char* property_value = nullptr;
 };
 
-extern struct Output* output_at_position(int x, int y);
-extern struct Output* output_most_occupied(Rect geometry);
+extern std::shared_ptr<struct Output> output_at_position(int x, int y);
+extern std::shared_ptr<struct Output> output_most_occupied(Rect geometry);
 
 extern const bool is_within_rect(int x, int y, const Rect& rect);
 
 //Returns x or y required to center a provided width and height in a output
-extern int center_x(struct Output* output, int width);
-extern int center_y(struct Output* output, int height);
+extern int center_x(std::shared_ptr<struct Output> output, int width);
+extern int center_y(std::shared_ptr<struct Output> output, int height);
 
 extern void set_window_transparency(Window window, float transparency);
 extern void increment_window_transparency(Window window, float transparency);

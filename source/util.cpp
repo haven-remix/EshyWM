@@ -175,12 +175,12 @@ void __log_event_info(LogSeverity severity, XEvent event)
 #endif
 
 
-int center_x(struct Output* output, int width)
+int center_x(std::shared_ptr<struct Output> output, int width)
 {
 	return output->geometry.x + ((output->geometry.width - width) / 2.0f);
 }
 
-int center_y(struct Output* output, int height)
+int center_y(std::shared_ptr<struct Output> output, int height)
 {
 	return output->geometry.y + ((output->geometry.height - height) / 2.0f);
 }
@@ -192,7 +192,7 @@ const bool is_within_rect(int x, int y, const Rect& rect)
 }
 
 
-Output* output_at_position(int x, int y)
+std::shared_ptr<Output> output_at_position(int x, int y)
 {
 	auto it = std::ranges::find_if(EshyWM::window_manager->outputs, [x, y](auto output){
 		return x >= output->geometry.x && x <= output->geometry.x + output->geometry.width && y >= output->geometry.y && y <= output->geometry.y + output->geometry.height;
@@ -201,7 +201,7 @@ Output* output_at_position(int x, int y)
 	return it != EshyWM::window_manager->outputs.end() ? *it : nullptr;
 }
 
-Output* output_most_occupied(Rect geometry)
+std::shared_ptr<Output> output_most_occupied(Rect geometry)
 {
 	auto it = std::ranges::find_if(EshyWM::window_manager->outputs, [&geometry](auto output){
 		const int window_center = geometry.x + (geometry.width / 2);

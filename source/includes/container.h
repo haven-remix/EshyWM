@@ -19,7 +19,7 @@ enum EDockLocation
 struct Dock
 {
     Window window;
-    Output* parent_output = nullptr;
+    std::shared_ptr<Output> parent_output = nullptr;
     Rect geometry = {0};
     EDockLocation dock_location = DL_NONE;
 };
@@ -27,29 +27,24 @@ struct Dock
 struct Workspace
 {
     int num = -1;
-    Output* parent_output = nullptr;
+    std::shared_ptr<Output> parent_output = nullptr;
 
     bool b_is_active = false;
     //Space left after docks have been accounted for
     Rect geometry;
-
-    //I am not convinced this is necessary, I can just find_if over window_list if I
-    //really need to get all windows in a workspace. Since it wont be a frequent
-    //operation the memory saving is likely worth it. 
-    //std::vector<EshyWMWindow*> windows;
 };
 
 struct Output
 {
     std::string name;
     Rect geometry = {0};
-    Dock* top_dock = nullptr;
-    Dock* bottom_dock = nullptr;
-    Workspace* active_workspace = nullptr;
+    std::shared_ptr<Dock> top_dock = nullptr;
+    std::shared_ptr<Dock> bottom_dock = nullptr;
+    std::shared_ptr<Workspace> active_workspace = nullptr;
 
-    void activate_workspace(Workspace* new_workspace);
+    void activate_workspace(std::shared_ptr<Workspace> new_workspace);
     void deactivate_workspace();
 
-    void add_dock(Dock* new_dock, EDockLocation location);
-    void remove_dock(Dock* dock);
+    void add_dock(std::shared_ptr<Dock> new_dock, EDockLocation location);
+    void remove_dock(std::shared_ptr<Dock> dock);
 };

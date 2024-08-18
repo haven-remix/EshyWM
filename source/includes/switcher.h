@@ -19,8 +19,8 @@ public:
     void update_switcher_window_options();
     void button_clicked(int x_root, int y_root);
 
-    void add_window_option(class EshyWMWindow* associated_window, const Imlib_Image& icon);
-    void remove_window_option(class EshyWMWindow* associated_window);
+    void add_window_option(std::shared_ptr<class EshyWMWindow> associated_window, class Image* icon);
+    void remove_window_option(std::shared_ptr<class EshyWMWindow> associated_window);
     void next_option();
     void confirm_choice();
 

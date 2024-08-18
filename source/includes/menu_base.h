@@ -8,7 +8,7 @@
 /**Used in switcher and taskbar*/
 struct window_button_pair
 {
-    class EshyWMWindow* window;
+    std::shared_ptr<class EshyWMWindow> window;
     std::shared_ptr<class WindowButton> button;
 };
 

@@ -1,3 +1,0 @@
-/home/eshy/eshywm/cmake-build-debug/CMakeFiles/eshywm.dir
-/home/eshy/eshywm/cmake-build-debug/CMakeFiles/edit_cache.dir
-/home/eshy/eshywm/cmake-build-debug/CMakeFiles/rebuild_cache.dir

@@ -2,6 +2,7 @@
 #include "config.h"
 #include "X11.h"
 #include "util.h"
+#include "image.h"
 
 #include <X11/Xatom.h>
 
@@ -9,6 +10,7 @@
 #include <string.h>
 #include <ranges>
 #include <algorithm>
+#include <fstream>
 
 static Display* display = nullptr;
 
@@ -116,7 +118,10 @@ const RRMonitorInfo get_monitors()
 const std::string get_atom_name(Atom name)
 {
     assert(display);
-    return XGetAtomName(display, name);
+    char* atom_name = XGetAtomName(display, name);
+    const std::string atom_name_str = atom_name;
+    XFree(atom_name);
+    return atom_name_str;
 }
 
 
@@ -275,6 +280,7 @@ const bool close_window(Window window)
     const int status = XGetWMProtocols(display, window, &supported_protocols, &num_supported_protocols);
 
     const bool b_protocol_exists = std::ranges::contains(std::span(supported_protocols, num_supported_protocols), X11::atoms.wm_delete_window);
+    XFree(supported_protocols);
 
     if(b_protocol_exists)
     {
@@ -285,7 +291,8 @@ const bool close_window(Window window)
         message.xclient.window = window;
         message.xclient.format = 32;
         message.xclient.data.l[0] = X11::atoms.wm_delete_window;
-        XSendEvent(display, window, false, 0 , &message);
+        message.xclient.data.l[1] = CurrentTime;
+        XSendEvent(display, window, false, NoEventMask, &message);
         return true;
     }
 
@@ -294,7 +301,12 @@ const bool close_window(Window window)
 
 const bool kill_window(Window window)
 {
-    return XKillClient(display, window) == Success;
+    XGrabServer(display);
+    XSetCloseDownMode(display, DestroyAll);
+    const int kill_result = XKillClient(display, window);
+    XSync(display, false);
+    XUngrabServer(display);
+    return kill_result == Success;
 }
 
 const bool destroy_window(Window window)
@@ -362,5 +374,81 @@ const bool resize_window(Window window, const Rect& size)
 {
     assert(display);
     return XResizeWindow(display, window, size.width, size.height) == Success;
+}
+
+
+Image* retrieve_window_icon(Window window)
+{
+    Image* image = new Image();
+    Atom type_return;
+    int format_return;
+    unsigned long nitems_return;
+    unsigned long bytes_after_return;
+    unsigned char* data_return = nullptr;
+
+    int status = XGetWindowProperty(X11::get_display(), window, X11::atoms.window_icon, 0, 1, false, X11::atoms.cardinal, &type_return, &format_return, &nitems_return, &bytes_after_return, &data_return);
+    if (status == Success && data_return)
+    {
+        const int width = *(unsigned int*)data_return;
+        XFree(data_return);
+
+        XGetWindowProperty(X11::get_display(), window, X11::atoms.window_icon, 1, 1, false, X11::atoms.cardinal, &type_return, &format_return, &nitems_return, &bytes_after_return, &data_return);
+        const int height = *(unsigned int*)data_return;
+        XFree(data_return);
+
+        XGetWindowProperty(X11::get_display(), window, X11::atoms.window_icon, 2, width * height, false, X11::atoms.cardinal, &type_return, &format_return, &nitems_return, &bytes_after_return, &data_return);
+        uint32_t* img_data = new uint32_t[width * height];
+        const ulong* ul = (ulong*)data_return;
+
+        for (int i = 0; i < nitems_return; i++)
+            img_data[i] = (uint32_t)ul[i];
+
+        XFree(data_return);
+
+        image->image = imlib_create_image_using_data(width, height, img_data);
+        if (image->image)
+            return image;
+    }
+
+    status = XGetWindowProperty(X11::get_display(), window, X11::atoms.window_icon_name, 0, 1024, False, AnyPropertyType, &type_return, &format_return, &nitems_return, &bytes_after_return, &data_return);
+    if (status == Success && type_return != None && format_return == 8 && data_return)
+    {
+        image->image = imlib_load_image(std::string("/usr/share/icons/hicolor/256x256/apps/" + std::string((const char*)data_return) + ".png").c_str());
+        XFree(data_return);
+        if (image->image)
+            return image;
+    }
+
+    status = XGetWindowProperty(X11::get_display(), window, X11::atoms.window_class, 0, 1024, False, AnyPropertyType, &type_return, &format_return, &nitems_return, &bytes_after_return, &data_return);
+    if (status == Success && type_return != None && format_return == 8 && data_return)
+    {
+        std::ifstream desktop_file("/usr/share/applications/" + std::string((const char*)data_return) + ".desktop");
+        std::cout << (const char*)data_return << std::endl;
+
+        if (!desktop_file.is_open())
+            return nullptr;
+
+        std::string line;
+        std::string icon_name;
+
+        while (getline(desktop_file, line))
+        {
+            if (line.find("Icon") != std::string::npos)
+            {
+                size_t Del = line.find("=");
+                icon_name = line.substr(Del + 1);
+                break;
+            }
+        }
+
+        desktop_file.close();
+        XFree(data_return);
+
+        image->image = imlib_load_image(std::string("/usr/share/icons/hicolor/256x256/apps/" + icon_name + ".png").c_str());
+        if (image->image)
+            return image;
+    }
+
+    return nullptr;
 }
 };

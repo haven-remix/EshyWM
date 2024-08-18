@@ -6,6 +6,7 @@
 #include "switcher.h"
 #include "util.h"
 #include "X11.h"
+#include "background.h"
 
 #include <X11/extensions/Xrandr.h>
 
@@ -19,14 +20,14 @@ bool EshyWM::initialize()
     EshyWMConfig::update_config();
     EshyWMConfig::update_data();
     
-    system(("feh --bg-scale " + std::string(EshyWMConfig::background_path)).c_str());
-
     window_manager = std::make_shared<WindowManager>();
     window_manager->initialize();
 
     imlib_context_set_display(X11::get_display());
     imlib_context_set_visual(DefaultVisual(X11::get_display(), DefaultScreen(X11::get_display())));
     imlib_context_set_colormap(DefaultColormap(X11::get_display(), DefaultScreen(X11::get_display())));
+
+    EshyBg::set_background(EshyWMConfig::background_path);
 
     switcher = std::make_shared<EshyWMSwitcher>(Rect{center_x(window_manager->outputs[0], 50), center_y(window_manager->outputs[0], EshyWMConfig::switcher_button_height), 50, 50}, EshyWMConfig::switcher_color);
 
@@ -66,7 +67,7 @@ void EshyWM::on_screen_resolution_changed(uint new_width, uint new_height)
 }
 
 
-void EshyWM::window_created_notify(EshyWMWindow* window)
+void EshyWM::window_created_notify(std::shared_ptr<EshyWMWindow> window)
 {
     if(!window)
         return;
@@ -75,7 +76,7 @@ void EshyWM::window_created_notify(EshyWMWindow* window)
         switcher->add_window_option(window, window->get_window_icon());
 }
 
-void EshyWM::window_destroyed_notify(EshyWMWindow* window)
+void EshyWM::window_destroyed_notify(std::shared_ptr<EshyWMWindow> window)
 {
     if(!window)
         return;

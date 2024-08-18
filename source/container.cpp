@@ -8,7 +8,7 @@
 #include <algorithm>
 #include <assert.h>
 
-void Output::activate_workspace(Workspace* new_workspace)
+void Output::activate_workspace(std::shared_ptr<Workspace> new_workspace)
 {
     assert(new_workspace);
     if(new_workspace->b_is_active)
@@ -33,7 +33,7 @@ void Output::activate_workspace(Workspace* new_workspace)
 
     //Raise all windows of this workspace
     auto in_active_workspace = [new_workspace = new_workspace](auto window){return window->parent_workspace == new_workspace;};
-    for(EshyWMWindow* window : EshyWM::window_manager->window_list | std::views::filter(in_active_workspace))
+    for(auto window : EshyWM::window_manager->window_list | std::views::filter(in_active_workspace))
     {
         window->minimize_window(false);
     }
@@ -45,7 +45,7 @@ void Output::deactivate_workspace()
         return;
 
     auto in_active_workspace = [active_workspace = active_workspace](auto window){return window->parent_workspace == active_workspace;};
-    for(EshyWMWindow* window : EshyWM::window_manager->window_list | std::views::filter(in_active_workspace))
+    for(auto window : EshyWM::window_manager->window_list | std::views::filter(in_active_workspace))
     {
         window->minimize_window(true);
     }
@@ -54,7 +54,7 @@ void Output::deactivate_workspace()
     active_workspace = nullptr;
 }
 
-void Output::add_dock(Dock* new_dock, EDockLocation location)
+void Output::add_dock(std::shared_ptr<Dock> new_dock, EDockLocation location)
 {
     switch (location)
     {
@@ -80,7 +80,7 @@ void Output::add_dock(Dock* new_dock, EDockLocation location)
     
     //Propogate geometry change to all windows in active_workspace
     auto in_active_workspace = [active_workspace = active_workspace](auto window){return window->parent_workspace == active_workspace;};
-    for(EshyWMWindow* window : EshyWM::window_manager->window_list | std::views::filter(in_active_workspace))
+    for(auto window : EshyWM::window_manager->window_list | std::views::filter(in_active_workspace))
     {
         if(window->get_window_state() == WS_MAXIMIZED)
         {
@@ -90,7 +90,7 @@ void Output::add_dock(Dock* new_dock, EDockLocation location)
     }
 }
 
-void Output::remove_dock(Dock* dock)
+void Output::remove_dock(std::shared_ptr<Dock> dock)
 {
     switch (dock->dock_location)
     {
@@ -116,7 +116,7 @@ void Output::remove_dock(Dock* dock)
 
     //Propogate geometry change to all windows in active_workspace
     auto in_active_workspace = [active_workspace = active_workspace](auto window){return window->parent_workspace == active_workspace;};
-    for(EshyWMWindow* window : EshyWM::window_manager->window_list | std::views::filter(in_active_workspace))
+    for(auto window : EshyWM::window_manager->window_list | std::views::filter(in_active_workspace))
     {
         if(window->get_window_state() == WS_MAXIMIZED)
         {

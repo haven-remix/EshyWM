@@ -1,10 +1,14 @@
 
+#pragma once
+
 #include "util.h"
 
 #include <X11/Xlib.h>
 #include <X11/extensions/Xrandr.h>
 
 #include <span>
+
+class Image;
 
 namespace X11
 {
@@ -144,4 +148,6 @@ extern const bool move_window(Window window, const Pos& pos);
 extern const bool move_window(Window window, const Rect& pos);
 extern const bool resize_window(Window window, const Size& size);
 extern const bool resize_window(Window window, const Rect& size);
+
+extern Image* retrieve_window_icon(Window window);
 };

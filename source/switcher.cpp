@@ -8,8 +8,6 @@
 #include <X11/Xutil.h>
 #include <X11/Xatom.h>
 #include <X11/extensions/Xdamage.h>
-#include <cairo/cairo.h>
-#include <cairo/cairo-xlib.h>
 #include <algorithm>
 #include <string.h>
 #include <cmath>
@@ -76,6 +74,9 @@ void EshyWMSwitcher::update_button_positions()
     uint width = EshyWMConfig::switcher_button_padding;
     for(window_button_pair pair : switcher_window_options)
     {
+        if (!pair.button)
+            continue;
+        
         width += pair.button->get_button_geometry().width;
         width += EshyWMConfig::switcher_button_padding;
     }
@@ -86,13 +87,16 @@ void EshyWMSwitcher::update_button_positions()
 
     const Pos cursor_position = X11::get_cursor_position();
 
-    if(Output* output = output_at_position(cursor_position.x, cursor_position.y))
+    if(auto output = output_at_position(cursor_position.x, cursor_position.y))
         set_position(center_x(output, width), center_y(output, height));
     else
         set_position(center_x(EshyWM::window_manager->outputs[0], width), center_y(EshyWM::window_manager->outputs[0], height));
 
     for(int i = 0; i < switcher_window_options.size(); i++)
     {
+        if (!switcher_window_options[i].button)
+            continue;
+        
         switcher_window_options[i].button->set_position(get_button_x_position(i), EshyWMConfig::switcher_button_padding);
         switcher_window_options[i].button->draw();
     }
@@ -115,9 +119,9 @@ void EshyWMSwitcher::update_switcher_window_options()
 }
 
 
-void EshyWMSwitcher::add_window_option(EshyWMWindow* associated_window, const Imlib_Image& icon)
+void EshyWMSwitcher::add_window_option(std::shared_ptr<EshyWMWindow> associated_window, Image* icon)
 {
-    imlib_context_set_image(icon);
+    imlib_context_set_image(icon->image);
     const int height = imlib_image_get_height();
     const int width = imlib_image_get_width();
 
@@ -126,14 +130,14 @@ void EshyWMSwitcher::add_window_option(EshyWMWindow* associated_window, const Im
     const Rect size = {0, 0, (uint)std::round(width * scale), (uint)std::round(height * scale)};
     const button_color_data color = {EshyWMConfig::switcher_button_color, EshyWMConfig::switcher_button_color, EshyWMConfig::switcher_button_color};
 
-    std::shared_ptr<ImageButton> button = std::make_shared<ImageButton>(menu_window, size, color, icon);
+    std::shared_ptr<ImageButton> button = std::make_shared<ImageButton>(menu_window, size, color, icon->image);
     button->set_border_color(EshyWMConfig::switcher_button_border_color);
     
     switcher_window_options.insert(switcher_window_options.begin(), {associated_window, button});
     update_button_positions();
 }
 
-void EshyWMSwitcher::remove_window_option(EshyWMWindow* associated_window)
+void EshyWMSwitcher::remove_window_option(std::shared_ptr<EshyWMWindow> associated_window)
 {
     for(int i = 0; i < switcher_window_options.size(); i++)
     {
@@ -161,17 +165,26 @@ void EshyWMSwitcher::select_option(int i)
     //Deselect previous
     if(i == 0 && switcher_window_options[switcher_window_options.size() - 1].button)
     {
+        if (!switcher_window_options[switcher_window_options.size() - 1].button)
+            return;
+        
         X11::move_window(switcher_window_options[switcher_window_options.size() - 1].button->get_window(), Pos{get_button_x_position(switcher_window_options.size() - 1), (int)EshyWMConfig::switcher_button_padding});
         X11::set_border_width(switcher_window_options[switcher_window_options.size() - 1].button->get_window(), 0);
     }
     else if(i > 0 && switcher_window_options[i - 1].button)
     {
+        if (!switcher_window_options[i - 1].button)
+            return;
+        
         X11::move_window(switcher_window_options[i - 1].button->get_window(), Pos{get_button_x_position(i - 1), (int)EshyWMConfig::switcher_button_padding});
         X11::set_border_width(switcher_window_options[i - 1].button->get_window(), 0);
     }
 
     if(switcher_window_options[i].button)
     {
+        if (!switcher_window_options[i].button)
+            return;
+        
         X11::move_window(switcher_window_options[i].button->get_window(), Pos{get_button_x_position(i), (int)EshyWMConfig::switcher_button_padding});
         X11::set_border_width(switcher_window_options[i].button->get_window(), 2);
     }

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "window_manager.h"
+#include "X11.h"
 #include "util.h"
 
 #include <Imlib2.h>
@@ -28,8 +29,10 @@ class EshyWMWindow
 {
 public:
 
-    EshyWMWindow(Window _window, struct Workspace* _workspace, const Rect& geometry);
+    EshyWMWindow(Window _window);
     ~EshyWMWindow();
+
+    void initialize(const X11::WindowAttributes& attributes);
 
     void frame_window();
     void unframe_window();
@@ -45,7 +48,7 @@ public:
     void fullscreen_window(bool b_fullscreen);
     void close_window();
 
-    void anchor_window(EWindowState anchor, Output* output_override = nullptr);
+    void anchor_window(EWindowState anchor, std::shared_ptr<Output> output_override = nullptr);
     void attempt_shift_monitor_anchor(EWindowState direction);
     void attempt_shift_monitor(EWindowState direction);
 
@@ -62,16 +65,16 @@ public:
     inline const Window get_frame() const {return frame;}
     inline const Window get_titlebar() const {return titlebar;}
     inline const Rect& get_frame_geometry() const {return frame_geometry;}
-    inline const Imlib_Image get_window_icon() const {return window_icon;}
+    inline Image* get_window_icon() const {return window_icon;}
     inline const EWindowState get_window_state() const {return window_state;}
 
     inline class WindowButton* get_close_button() const {return close_button;}
 
-    Workspace* parent_workspace;
-
-    bool b_show_titlebar;
+    std::shared_ptr<class Workspace> parent_workspace;
 
 private:
+
+    bool b_show_titlebar;
 
     Window window;
     Window frame;
@@ -83,10 +86,8 @@ private:
 
     EWindowState window_state;
 
-    Imlib_Image window_icon;
-
-    cairo_surface_t* cairo_titlebar_surface;
-    cairo_t* cairo_context;
-
+    class Image* window_icon;
     class WindowButton* close_button;
+
+    Imlib_Font window_font;
 };
